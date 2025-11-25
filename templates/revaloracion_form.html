@@ -1,0 +1,359 @@
+{% extends "base.html" %}
+
+{% block title %}Revaloración - {{ patient.nombre }} {{ patient.apellidop }}{% endblock %}
+
+{% block head_extra %}
+<style>
+    .lightbox-overlay {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background-color: rgba(0, 0, 0, 0.9);
+        display: flex; justify-content: center; align-items: center;
+        z-index: 9999; cursor: pointer; padding: 20px;
+        box-sizing: border-box;
+    }
+    .lightbox-image {
+        max-width: 95%; max-height: 95%;
+        object-fit: contain; border: 3px solid white;
+        box-shadow: 0 0 25px rgba(0,0,0,0.5);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-md-3">
+            {% include 'patient-sidebar.html' %}
+        </div>
+
+        <div class="col-md-9">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header d-flex align-items-center justify-content-between">
+                    <h5 class="mb-0">
+                        <i class="fas fa-chart-line me-2"></i> Revaloración Subjetiva del Paciente
+                    </h5>
+                    <span>ID Paciente: {{ patient.id_px }}</span>
+                </div>
+                
+                <form method="POST" id="revaloracionForm">
+                    <input type="hidden" name="id_revaloracion" value="{{ current_data.id_revaloracion or '' }}">
+                    <input type="hidden" name="fecha_cargada" value="{{ loaded_date or today_str }}">
+                    
+                    <input type="hidden" id="diagrama_puntos_hidden" name="diagrama_puntos" value="{{ current_data.diagrama_actual or '0,' }}">
+                    
+                    <div class="card-body">
+                        <div class="row mb-3 align-items-end">
+                            <div class="col-md-6">
+        <div class="dropdown">
+            <button class="btn btn-outline-secondary dropdown-toggle btn-sm" type="button" id="revalHistoryDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                Viendo: 
+                {% if loaded_id_revaloracion %}
+                    {% set loaded_record = (all_records_info|selectattr('id_revaloracion', 'equalto', loaded_id_revaloracion)|first) %}
+                    {% if loaded_record %}
+                        {{ loaded_record.fecha }}
+                    {% else %}
+                        ID {{ loaded_id_revaloracion }}
+                    {% endif %}
+                {% else %}
+                    Nueva Revaloración ({{ today_str }})
+                {% endif %}
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="revalHistoryDropdown">
+                <li>
+                    <a class="dropdown-item {% if not loaded_id_revaloracion %}active{% endif %}" 
+                       href="{{ url_for('clinical.manage_revaloracion', patient_id=patient.id_px) }}">
+                        + Crear Nueva ({{ today_str }})
+                    </a>
+                </li>
+                <li><hr class="dropdown-divider"></li>
+                {% for record in all_records_info %}
+                <li>
+                    <a class="dropdown-item {% if loaded_id_revaloracion == record.id_revaloracion %}active{% endif %}"
+                       href="{{ url_for('clinical.manage_revaloracion', patient_id=patient.id_px, selected_id=record.id_revaloracion) }}">
+                        {{ record.fecha }}
+                    </a>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <label for="id_anamnesis_inicial" class="form-label mb-1"><small>Vincular a Episodio:</small></label>
+        <select class="form-select form-select-sm" id="id_anamnesis_inicial" name="id_anamnesis_inicial" {% if not is_editable %}disabled{% endif %}>
+            <option value="" {% if not linked_anamnesis_id %}selected{% endif %}>-- No vincular --</option>
+            {% for anam in anamnesis_summary_list %}
+            <option value="{{ anam.id_anamnesis }}" {% if anam.id_anamnesis == linked_anamnesis_id %}selected{% endif %}>
+                {{ anam.fecha }} - ({{ anam.condicion1 or 'Episodio' }})
+            </option>
+            {% endfor %}
+        </select>
+    </div>
+</div>
+
+                        <hr>
+                        <h5 class="mb-3">Comparativa de Calificaciones (Subjetivo)</h5>
+
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <label for="calif1_actual" class="form-label">
+                                    <span class="badge bg-secondary">Inicial</span> 
+                                    <span id="condicion1_label_span">{{ initial_anamnesis_data.condicion1 or 'Condición 1' }}</span>: 
+                                    <strong>({{ initial_anamnesis_data.calif1 or 0 }}/10)</strong>
+                                </label>
+                                <div class="d-flex align-items-center">
+                                    <input type="range" class="form-range me-2" id="calif1_actual" name="calif1_actual" min="0" max="10" 
+                                           value="{{ current_data.calif1_actual or 0 }}" 
+                                           oninput="this.nextElementSibling.value = this.value"
+                                           {% if not is_editable %}disabled{% endif %}>
+                                    <output class="badge bg-primary fs-6" style="width: 40px;">{{ current_data.calif1_actual or 0 }}</output>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="calif2_actual" class="form-label">
+                                    <span class="badge bg-secondary">Inicial</span> 
+                                    <span id="condicion2_label_span">{{ initial_anamnesis_data.condicion2 or 'Condición 2' }}</span>: 
+                                    <strong>({{ initial_anamnesis_data.calif2 or 0 }}/10)</strong>
+                                </label>
+                                <div class="d-flex align-items-center">
+                                    <input type="range" class="form-range me-2" id="calif2_actual" name="calif2_actual" min="0" max="10" 
+                                           value="{{ current_data.calif2_actual or 0 }}" 
+                                           oninput="this.nextElementSibling.value = this.value"
+                                           {% if not is_editable %}disabled{% endif %}>
+                                    <output class="badge bg-primary fs-6" style="width: 40px;">{{ current_data.calif2_actual or 0 }}</output>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="calif3_actual" class="form-label">
+                                    <span class="badge bg-secondary">Inicial</span> 
+                                    <span id="condicion3_label_span">{{ initial_anamnesis_data.condicion3 or 'Condición 3' }}</span>: 
+                                    <strong>({{ initial_anamnesis_data.calif3 or 0 }}/10)</strong>
+                                </label>
+                                <div class="d-flex align-items-center">
+                                    <input type="range" class="form-range me-2" id="calif3_actual" name="calif3_actual" min="0" max="10" 
+                                           value="{{ current_data.calif3_actual or 0 }}" 
+                                           oninput="this.nextElementSibling.value = this.value"
+                                           {% if not is_editable %}disabled{% endif %}>
+                                    <output class="badge bg-primary fs-6" style="width: 40px;">{{ current_data.calif3_actual or 0 }}</output>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <label for="mejora_subjetiva_pct" class="form-label">Mejora Subjetiva Percibida (%):</label>
+                                <div class="input-group">
+                                    <input type="number" class="form-control" id="mejora_subjetiva_pct" name="mejora_subjetiva_pct" 
+                                           min="0" max="100" step="5" value="{{ current_data.mejora_subjetiva_pct or 0 }}" 
+                                           {% if not is_editable %}disabled{% endif %}>
+                                    <span class="input-group-text">%</span>
+                                </div>
+                            </div>
+                            <div class="col-md-8">
+                                <label for="notas_adicionales_reval" class="form-label">Notas de Revaloración (Subjetivo):</label>
+                                <textarea class="form-control" id="notas_adicionales_reval" name="notas_adicionales_reval" 
+                                          rows="3" {% if not is_editable %}disabled{% endif %}>{{ current_data.notas_adicionales_reval or '' }}</textarea>
+                            </div>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-12">
+                                <label class="form-label">Diagrama de Dolor Actual:</label>
+                                {% include 'body_diagram_partial.html' with context %}
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-12 text-end border-top pt-3">
+                                <a href="{{ url_for('patient.patient_detail', patient_id=patient.id_px) }}" class="btn btn-secondary me-2">
+                                    <i class="fas fa-arrow-left me-1"></i> Regresar
+                                </a>
+                                {% if is_editable %}
+                                <button type="submit" class="btn btn-success">
+                                    <i class="fas fa-save me-1"></i> Guardar Revaloración
+                                </button>
+                                {% else %}
+                                <button type="submit" class="btn btn-success" disabled>
+                                    <i class="fas fa-save me-1"></i> Guardar Revaloración
+                                </button>
+                                <small class="ms-2 text-muted">No se puede editar un registro antiguo.</small>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div> </form>
+            </div> <div class="card shadow-sm mb-4">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">
+                        <i class="fas fa-camera me-2"></i> Imágenes Objetivas (de la sección "Pruebas")
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info" role="alert">
+                        <i class="fas fa-info-circle"></i> 
+                        Mostrando las imágenes guardadas en la sección <strong>"Pruebas"</strong> para esta misma fecha (<strong>{{ loaded_date }}</strong>).
+                        <br>
+                        Para cargar o actualizar estas fotos, por favor ve a la sección "Pruebas" y guarda los cambios allí.
+                    </div>
+            
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label fw-bold">Postura Frontal (Pruebas)</label>
+                            {% if postura_data_for_date.frente %}
+                                <img src="{{ url_for('static', filename=postura_data_for_date.frente) }}" class="img-fluid rounded border zoomable-image" alt="Postura Frontal">
+                            {% else %}
+                                <div class="alert alert-secondary text-center p-5">Sin imagen frontal</div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label fw-bold">Postura Lateral (Pruebas)</label>
+                            {% if postura_data_for_date.lado %}
+                                <img src="{{ url_for('static', filename=postura_data_for_date.lado) }}" class="img-fluid rounded border zoomable-image" alt="Postura Lateral">
+                            {% else %}
+                                <div class="alert alert-secondary text-center p-5">Sin imagen lateral</div>
+                            {% endif %}
+                        </div>
+            
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label fw-bold">Postura Lateral 2 (Pruebas)</label>
+                            {% if postura_data_for_date.postura_extra %}
+                                <img src="{{ url_for('static', filename=postura_data_for_date.postura_extra) }}" class="img-fluid rounded border zoomable-image" alt="Postura Lateral 2">
+                            {% else %}
+                                <div class="alert alert-secondary text-center p-5">Sin imagen lateral 2</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label fw-bold">Plantografía (Pruebas)</label>
+                            {% if postura_data_for_date.pies %}
+                                <img src="{{ url_for('static', filename=postura_data_for_date.pies) }}" class="img-fluid rounded border zoomable-image" alt="Plantografía">
+                            {% else %}
+                                <div class="alert alert-secondary text-center p-5">Sin imagen de pisada</div>
+                            {% endif %}
+                        </div>
+            
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label fw-bold">Pies Frontal (Pruebas)</label>
+                            {% if postura_data_for_date.pies_frontal %}
+                                <img src="{{ url_for('static', filename=postura_data_for_date.pies_frontal) }}" class="img-fluid rounded border zoomable-image" alt="Pies Frontal">
+                            {% else %}
+                                <div class="alert alert-secondary text-center p-5">Sin imagen pies frontal</div>
+                            {% endif %}
+                        </div>
+            
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label fw-bold">Pies Trasera (Pruebas)</label>
+                            {% if postura_data_for_date.pies_trasera %}
+                                <img src="{{ url_for('static', filename=postura_data_for_date.pies_trasera) }}" class="img-fluid rounded border zoomable-image" alt="Pies Trasera">
+                            {% else %}
+                                <div class="alert alert-secondary text-center p-5">Sin imagen pies trasera</div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <hr>
+                    <h5 class="mb-3">Radiografías Asociadas (de Pruebas)</h5>
+                    <div class="row">
+                        {% if latest_rx_list %}
+                            {% for rx in latest_rx_list %}
+                                <div class="col-md-3 mb-3">
+                                    <a href="{{ url_for('static', filename=rx.ruta_archivo) }}" data-lightbox="rx-gallery-{{ loaded_date }}" data-title="Radiografía ({{ rx.fecha_carga }})">
+                                        <img src="{{ url_for('static', filename=rx.ruta_archivo) }}" class="img-fluid rounded border zoomable-image" alt="Radiografía">
+                                    </a>
+                                </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="col-12">
+                                <p class="text-muted">No hay radiografías asociadas a las pruebas de esta fecha.</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div> </div> </div> </div> </div> {% endblock %}
+
+{% block scripts %}
+<script>
+    const anamnesisMap = {
+        {% for anam in anamnesis_summary_list %}
+            "{{ anam.id_anamnesis }}": {
+                "condicion1": {{ anam.condicion1 | tojson | safe }},
+                "condicion2": {{ anam.condicion2 | tojson | safe }},
+                "condicion3": {{ anam.condicion3 | tojson | safe }}
+            }{% if not loop.last %},{% endif %}
+        {% endfor %}
+    };
+</script>
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        // --- SCRIPT PARA SLIDERS ---
+        const sliders = document.querySelectorAll('input[type="range"]');
+        sliders.forEach(slider => {
+            const output = slider.nextElementSibling;
+            if (output && output.tagName === 'OUTPUT') {
+                // Sincronizar al cargar la página
+                output.value = slider.value;
+                
+                // Sincronizar al cambiar
+                slider.addEventListener('input', function() {
+                    output.value = this.value;
+                });
+            }
+        });
+
+        // --- SCRIPT PARA LABELS DE ANAMNESIS ---
+        const anamnesisSelect = document.getElementById('id_anamnesis_inicial');
+        const cond1Span = document.getElementById('condicion1_label_span');
+        const cond2Span = document.getElementById('condicion2_label_span');
+        const cond3Span = document.getElementById('condicion3_label_span');
+
+        function updateConditionLabels() {
+             if (!anamnesisSelect) return;
+             const selectedAnamnesisId = anamnesisSelect.value;
+             const selectedData = anamnesisMap[selectedAnamnesisId];
+             
+             if (selectedData) {
+                if(cond1Span) cond1Span.textContent = selectedData.condicion1 || '(Vacío)';
+                if(cond2Span) cond2Span.textContent = selectedData.condicion2 || '';
+                if(cond3Span) cond3Span.textContent = selectedData.condicion3 || '';
+            } else {
+                // Usar los datos de la anamnesis inicial por defecto si no hay selección válida
+                const defaultData = JSON.parse('{{ initial_anamnesis_data | tojson | safe or "{}" }}');
+                if(cond1Span) cond1Span.textContent = defaultData.condicion1 || '(N/A)';
+                if(cond2Span) cond2Span.textContent = defaultData.condicion2 || '';
+                if(cond3Span) cond3Span.textContent = defaultData.condicion3 || '';
+            }
+        }
+
+        if (anamnesisSelect) {
+            anamnesisSelect.addEventListener('change', updateConditionLabels);
+            updateConditionLabels(); // Llamar al cargar
+        }
+        // 1. Llamamos a la función para activar el zoom en las imágenes
+        enableImageZoom();
+
+        // 2. Definimos la función que activa el zoom
+        function enableImageZoom() {
+            const images = document.querySelectorAll('.zoomable-image'); 
+            images.forEach(img => {
+                img.addEventListener('click', handleImageClick);
+            });
+        }
+
+        // 3. Definimos la función que MANEJA el clic (crea el lightbox)
+        function handleImageClick(event) {
+            const clickedImage = event.target;
+            const overlay = document.createElement('div');
+            overlay.className = 'lightbox-overlay';
+            const largeImage = document.createElement('img');
+            largeImage.className = 'lightbox-image';
+            largeImage.src = clickedImage.src; 
+            overlay.appendChild(largeImage);
+            document.body.appendChild(overlay);
+            overlay.addEventListener('click', () => {
+                document.body.removeChild(overlay);
+            }, { once: true }); 
+        }
+    });
+</script>
+{% endblock %}

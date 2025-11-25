@@ -1,0 +1,233 @@
+{% extends "base.html" %}
+
+{% block title %}Plan de Cuidado - {{ patient.nombre }} {{ patient.apellidop }}{% endblock %}
+
+{% block head_extra %}
+<style>
+    /* Estilos para la calculadora de costos (si son necesarios) */
+    #calculo-inversion strong {
+        font-size: 1.1rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        
+        <div class="col-md-3">
+            {% include 'patient-sidebar.html' %}
+        </div>
+
+        <div class="col-md-9">
+            <form method="POST" action="{{ url_for('clinical.manage_plan_cuidado', patient_id=patient.id_px) }}" id="planCuidadoForm">
+                <div class="card shadow-sm mb-4">
+                    
+                    <div class="card-header d-flex align-items-center justify-content-between">
+                        <h5 class="mb-0">
+                            <i class="fas fa-clipboard-list fa-fw me-2"></i>Plan de Cuidado
+                        </h5>
+                        <span>ID Paciente: {{ patient.id_px }}</span>
+                    </div>
+                    
+                    <div class="card-body">
+                        
+                        <input type="hidden" name="id_plan" value="{{ loaded_id_plan or '' }}">
+                        <input type="hidden" name="fecha_cargada" value="{{ current_data.get('fecha')|f_date if current_data.get('fecha') else today_str }}">
+
+<div class="dropdown mb-3">
+    <button class="btn btn-outline-secondary dropdown-toggle btn-sm" type="button" id="planHistoryDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+        Viendo: 
+        {% if loaded_id_plan %}
+            {% set loaded_record = (all_records_info|selectattr('id_plan', 'equalto', loaded_id_plan)|first) %}
+            {% if loaded_record %}
+                {{ loaded_record.fecha }} - ({{ loaded_record.pb_diagnostico or 'Plan' }})
+            {% else %}
+                ID {{ loaded_id_plan }}
+            {% endif %}
+        {% else %}
+            Nuevo Plan ({{ today_str }})
+        {% endif %}
+    </button>
+    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="planHistoryDropdown">
+        <li>
+            <a class="dropdown-item {% if not loaded_id_plan %}active{% endif %}" 
+               href="{{ url_for('clinical.manage_plan_cuidado', patient_id=patient.id_px) }}">
+                + Crear Nuevo ({{ today_str }})
+            </a>
+        </li>
+        <li><hr class="dropdown-divider"></li>
+        {% for record in all_records_info %}
+        <li>
+            <a class="dropdown-item {% if loaded_id_plan == record.id_plan %}active{% endif %}"
+               href="{{ url_for('clinical.manage_plan_cuidado', patient_id=patient.id_px, selected_id=record.id_plan) }}">
+                {{ record.fecha }} - ({{ record.pb_diagnostico or 'Plan' }})
+            </a>
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+                        {% if not is_editable and current_data and current_data.get('id_plan') %}
+                            <div class="alert alert-warning" role="alert">
+                              <i class="fas fa-info-circle me-2"></i>Este registro no puede ser modificado, es solo por historial.
+                            </div>
+                        {% endif %}
+                        
+                        <hr>
+
+                        <div class="row">
+                            <div class="col-lg-8">
+                                <div class="form-section">
+                                    <h5>Detalles del Plan</h5>
+                                    <div class="mb-3">
+                                        <label for="pb_diagnostico" class="form-label">Pb. Diagnóstico:</label>
+                                        <input type="text" class="form-control" id="pb_diagnostico" name="pb_diagnostico" value="{{ current_data.get('pb_diagnostico', '') }}" {% if not is_editable %}disabled{% endif %}>
+                                    </div>
+                                    <div class="row">
+                                        <div class="col-md-6 mb-3">
+                                            <label for="id_dr" class="form-label">Qp a Cargo del Plan:</label>
+                                            <select class="form-select" id="id_dr" name="id_dr" {% if not is_editable %}disabled{% endif %}>
+                                                {% for doctor in doctors_list %}
+                                                <option value="{{ doctor.id_dr }}" {% if doctor.id_dr == linked_doctor_id %}selected{% endif %}>
+                                                    Dr. {{ doctor.nombre }}
+                                                </option>
+                                                {% endfor %}
+                                            </select>
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <label for="etapa" class="form-label">Etapa de Cuidado:</label>
+                                            <select class="form-select" id="etapa" name="etapa" {% if not is_editable %}disabled{% endif %}>
+                                                <option value="Sintomatico" {% if current_data.get('etapa') == 'Sintomatico' %}selected{% endif %}>Sintomático</option>
+                                                <option value="Correctivo" {% if current_data.get('etapa') == 'Correctivo' %}selected{% endif %}>Correctivo</option>
+                                                <option value="Sintomatico-Correctivo" {% if current_data.get('etapa') == 'Sintomatico-Correctivo' %}selected{% endif %}>Sintomático-Correctivo</option>
+                                                <option value="Mantenimiento" {% if current_data.get('etapa') == 'Mantenimiento' %}selected{% endif %}>Mantenimiento</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="form-section">
+                                    <h5>Sesiones y Costos</h5>
+                                    <div class="row" id="calculo-inversion">
+                                        <div class="col-md-4 mb-3">
+                                            <label for="visitas_qp" class="form-label">Ajustes Quirprácticos:</label>
+                                            <input type="number" class="form-control" id="visitas_qp" name="visitas_qp" min="0" value="{{ current_data.get('visitas_qp', 0) }}" {% if not is_editable %}disabled{% endif %}>
+                                            <small class="text-muted">Costo unit: {{ "$%.2f"|format(costo_qp_js|float) }}</small>
+                                        </div>
+                                        <div class="col-md-4 mb-3">
+                                            <label for="visitas_tf" class="form-label">Terapia Física (TF):</label>
+                                            <input type="number" class="form-control" id="visitas_tf" name="visitas_tf" min="0" value="{{ current_data.get('visitas_tf', 0) }}" {% if not is_editable %}disabled{% endif %}>
+                                            <small class="text-muted">Costo unit: {{ "$%.2f"|format(costo_tf_js|float) }}</small>
+                                        </div>
+                                        <div class="col-md-4 mb-3">
+                                            <label for="promocion_pct" class="form-label">Desc/Promoción (%):</label>
+                                            <input type="number" class="form-control" id="promocion_pct" name="promocion_pct" min="0" max="100" value="{{ current_data.get('promocion_pct', 0) }}" {% if not is_editable %}disabled{% endif %}>
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <p class="mb-0">Ahorro: <strong class="text-success" id="ahorro_display">{{ "$%.2f"|format(current_data.get('ahorro_calculado', 0.0)|float) }}</strong></p>
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <p class="mb-0">Inversión Total: <strong class="text-primary" id="inversion_display">{{ "$%.2f"|format(current_data.get('inversion_total', 0.0)|float) }}</strong></p>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="form-section">
+                                    <h5>Notas del Plan</h5>
+                                    <textarea class="form-control" name="notas_plan" id="notas_plan" rows="3" {% if not is_editable %}disabled{% endif %}>{{ current_data.get('notas_plan', '') }}</textarea>
+                                </div>
+                            </div>
+                            
+                            <div class="col-lg-4">
+                                <div class="form-section">
+                                    <h5>Adicionales Recomendados</h5>
+                                    <div class="checkbox-list" style="max-height: 450px; overflow-y: auto;">
+                                        {% if adicionales_list %}
+                                            {% for adicional in adicionales_list %}
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="checkbox" name="adicionales_chk" value="{{ adicional.id_prod }}" id="adicional_{{ adicional.id_prod }}"
+                                                           {% if adicional.id_prod|string in current_selected_adicionales %}checked{% endif %}
+                                                           {% if not is_editable %}disabled{% endif %}>
+                                                    <label class="form-check-label" for="adicional_{{ adicional.id_prod }}">
+                                                        {{ adicional.nombre }}
+                                                        <small class="text-muted ms-2">({{ "$%.2f"|format(adicional.costo|float) }})</small>
+                                                    </label>
+                                                </div>
+                                            {% endfor %}
+                                        {% else %}
+                                            <p class="text-muted small">No hay productos adicionales configurados.</p>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                
+                                
+                            </div>
+                        </div>
+
+                        <div class="d-flex justify-content-end mt-4 border-top pt-3">
+                            {% if loaded_id_plan and not is_editable %}
+                                <a href="{{ url_for('clinical.generate_plan_pdf', patient_id=patient.id_px, id_plan=loaded_id_plan) }}" class="btn btn-info me-auto" target="_blank">
+                                    <i class="fas fa-file-pdf me-1"></i> Ver PDF del Plan
+                                </a>
+                            {% endif %}
+                            <a href="{{ url_for('patient.patient_detail', patient_id=patient.id_px) }}" class="btn btn-secondary me-2">Cancelar</a>
+                            <button type="submit" class="btn btn-primary" {% if not is_editable %}disabled{% endif %}>
+                                <i class="fas fa-save me-1"></i> Guardar Plan
+                            </button>
+                            {% if loaded_id_plan and is_editable %}
+                                <a href="{{ url_for('clinical.generate_plan_pdf', patient_id=patient.id_px, id_plan=loaded_id_plan) }}" class="btn btn-info ms-2" target="_blank">
+                                    <i class="fas fa-file-pdf me-1"></i> Generar PDF
+                                </a>
+                            {% endif %}
+                        </div>
+                        {% if loaded_id_plan %}
+                                <div class="form-section">
+                                    <h5>Progreso del Plan</h5>
+                                    <p>
+                                        Ajustes (QP) Completados: 
+                                        <strong>{{ qp_completadas }} de {{ current_data.get('visitas_qp', 0) }}</strong>
+                                    </p>
+                                    <p>
+                                        Terapias (TF) Completadas: 
+                                        <strong>{{ tf_completadas }} de {{ current_data.get('visitas_tf', 0) }}</strong>
+                                    </p>
+                                    
+                                    {% if adicionales_status %}
+                                        <h6 class="mt-3">Estado de Adicionales</h6>
+                                        <ul class="list-group list-group-flush">
+                                        {% for item in adicionales_status %}
+                                            <li class="list-group-item px-0 py-1 d-flex justify-content-between">
+                                                <small>{{ item.nombre }}</small>
+                                                {% if item.status == 'Adquirido' %}
+                                                    <span class="badge bg-success">{{ item.status }}</span>
+                                                {% elif item.status == 'Renovación sugerida' %}
+                                                    <span class="badge bg-warning text-dark">{{ item.status }}</span>
+                                                {% else %}
+                                                    <span class="badge bg-danger">{{ item.status }}</span>
+                                                {% endif %}
+                                            </li>
+                                        {% endfor %}
+                                        </ul>
+                                    {% endif %}
+                                </div>
+                                {% endif %}
+
+                    </div> </div> </form> </div> </div> </div> {% endblock %}
+
+
+{% block scripts %}
+{{ super() }}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        initializeCostCalculator(
+            'visitas_qp', 
+            'visitas_tf', 
+            'promocion_pct',
+            'inversion_display', 
+            'ahorro_display',
+            {{ costo_qp_js or 0 }}, 
+            {{ costo_tf_js or 0 }}
+        );
+    });
+</script>
+{% endblock %}

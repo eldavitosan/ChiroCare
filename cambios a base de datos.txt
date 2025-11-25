@@ -1,0 +1,94 @@
+ALTER TABLE revaloraciones
+
+    DROP COLUMN frente_path,
+
+    DROP COLUMN lado1_path,
+
+    DROP COLUMN lado2_path,
+
+    DROP COLUMN pies_path,
+
+    DROP COLUMN termografia_path,
+
+    DROP COLUMN pies_frontal_path,
+
+    DROP COLUMN pies_trasera_path,
+
+    ADD COLUMN id_postura_asociado INT NULL AFTER id_anamnesis_inicial,
+
+    ADD CONSTRAINT fk_revaloracion_postura
+
+        FOREIGN KEY (id_postura_asociado)
+
+        REFERENCES postura(id_postura)
+
+        ON DELETE SET NULL
+
+        ON UPDATE CASCADE;
+
+
+Cambio en revaloracion y postura, para no tener imagenes duplicadas
+
+
+
+-- Haz una copia de seguridad antes de ejecutar esto.
+
+SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
+START TRANSACTION;
+SET time_zone = "+00:00";
+
+-- 1. Tabla 'anamnesis'
+UPDATE `anamnesis` SET `fecha` = STR_TO_DATE(`fecha`, '%d/%m/%Y') WHERE `fecha` IS NOT NULL AND `fecha` != '';
+ALTER TABLE `anamnesis` MODIFY COLUMN `fecha` DATE NOT NULL;
+
+-- 2. Tabla 'antecedentes'
+UPDATE `antecedentes` SET `fecha` = STR_TO_DATE(`fecha`, '%d/%m/%Y') WHERE `fecha` IS NOT NULL AND `fecha` != '';
+ALTER TABLE `antecedentes` MODIFY COLUMN `fecha` DATE NOT NULL;
+
+-- 3. Tabla 'datos_personales'
+UPDATE `datos_personales` SET `fecha` = STR_TO_DATE(`fecha`, '%d/%m/%Y') WHERE `fecha` IS NOT NULL AND `fecha` != '';
+ALTER TABLE `datos_personales` MODIFY COLUMN `fecha` DATE DEFAULT NULL;
+
+-- 4. Tabla 'notas_generales'
+UPDATE `notas_generales` SET `fecha` = STR_TO_DATE(`fecha`, '%d/%m/%Y') WHERE `fecha` IS NOT NULL AND `fecha` != '';
+ALTER TABLE `notas_generales` MODIFY COLUMN `fecha` DATE NOT NULL;
+
+-- 5. Tabla 'plancuidado'
+UPDATE `plancuidado` SET `fecha` = STR_TO_DATE(`fecha`, '%d/%m/%Y') WHERE `fecha` IS NOT NULL AND `fecha` != '';
+ALTER TABLE `plancuidado` MODIFY COLUMN `fecha` DATE NOT NULL;
+
+-- 6. Tabla 'postura'
+UPDATE `postura` SET `fecha` = STR_TO_DATE(`fecha`, '%d/%m/%Y') WHERE `fecha` IS NOT NULL AND `fecha` != '';
+ALTER TABLE `postura` MODIFY COLUMN `fecha` DATE NOT NULL;
+
+-- 7. Tabla 'quiropractico'
+UPDATE `quiropractico` SET `fecha` = STR_TO_DATE(`fecha`, '%d/%m/%Y') WHERE `fecha` IS NOT NULL AND `fecha` != '';
+ALTER TABLE `quiropractico` MODIFY COLUMN `fecha` DATE NOT NULL;
+
+-- 8. Tabla 'recibos'
+UPDATE `recibos` SET `fecha` = STR_TO_DATE(`fecha`, '%d/%m/%Y') WHERE `fecha` IS NOT NULL AND `fecha` != '';
+ALTER TABLE `recibos` MODIFY COLUMN `fecha` DATE NOT NULL COMMENT 'Fecha de emisión';
+
+-- 9. Tabla 'revaloraciones'
+UPDATE `revaloraciones` SET `fecha` = STR_TO_DATE(`fecha`, '%d/%m/%Y') WHERE `fecha` IS NOT NULL AND `fecha` != '';
+ALTER TABLE `revaloraciones` MODIFY COLUMN `fecha` DATE NOT NULL COMMENT 'Fecha de la revaloración';
+
+-- Actualizar los índices (opcional pero recomendado)
+-- Estos ALTER quitan la conversión STR_TO_DATE de los índices, lo cual ya no es necesario.
+
+ALTER TABLE `anamnesis` DROP INDEX `idx_anamnesis_paciente_fecha`, ADD INDEX `idx_anamnesis_paciente_fecha` (`id_px`, `fecha`);
+ALTER TABLE `antecedentes` DROP INDEX `idx_antecedentes_paciente_fecha`, ADD INDEX `idx_antecedentes_paciente_fecha` (`id_px`, `fecha`);
+ALTER TABLE `plancuidado` DROP INDEX `idx_plancuidado_paciente_fecha`, ADD INDEX `idx_plancuidado_paciente_fecha` (`id_px`, `fecha`);
+ALTER TABLE `postura` DROP INDEX `idx_postura_paciente_fecha`, ADD INDEX `idx_postura_paciente_fecha` (`id_px`, `fecha`);
+ALTER TABLE `quiropractico` DROP INDEX `idx_quiropractico_paciente_fecha`, ADD INDEX `idx_quiropractico_paciente_fecha` (`id_px`, `fecha`);
+ALTER TABLE `recibos` DROP INDEX `idx_recibos_paciente_fecha`, ADD INDEX `idx_recibos_paciente_fecha` (`id_px`, `fecha`);
+ALTER TABLE `revaloraciones` DROP INDEX `idx_revaloracion_paciente_fecha`, ADD INDEX `idx_revaloracion_paciente_fecha` (`id_px`, `fecha`);
+
+
+COMMIT;
+
+
+Cambio la fecha a tipo DATE
+
+
+

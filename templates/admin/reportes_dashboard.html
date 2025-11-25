@@ -1,0 +1,409 @@
+{% extends "base.html" %}
+
+{% block title %}Reportes de Administración{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2><i class="fas fa-chart-line me-2"></i>Reportes de Administración</h2>
+        <a href="{{ url_for('admin.admin_dashboard') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="fas fa-arrow-left me-1"></i> Volver al Dashboard Admin
+        </a>
+    </div>
+    <hr>
+
+    <h3 class="mt-4 mb-3 text-primary"><i class="fas fa-dollar-sign me-2"></i>Financieros</h3>
+    
+    <div class="row mb-4">
+        <div class="col-lg-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0">Reporte de Ingresos (Total y por Doctor)</h5>
+                </div>
+                <div class="card-body">
+                    <form method="post">
+                        {{ form_ingresos.hidden_tag() }}
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                {{ form_ingresos.fecha_inicio.label(class="form-label") }}
+                                {{ form_ingresos.fecha_inicio(class="form-control") }}
+                                {% for error in form_ingresos.fecha_inicio.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                {{ form_ingresos.fecha_fin.label(class="form-label") }}
+                                {{ form_ingresos.fecha_fin(class="form-control") }}
+                                {% for error in form_ingresos.fecha_fin.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                            </div>
+                            <div class="col-md-12 mb-3">
+                                {{ form_ingresos.doctor_id.label(class="form-label") }}
+                                {{ form_ingresos.doctor_id(class="form-select") }}
+                                {% for error in form_ingresos.doctor_id.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                            </div>
+                        </div>
+                        <div class="d-grid">
+                            {{ form_ingresos.submit_ingresos(class="btn btn-primary") }}
+                        </div>
+                    </form>
+                    
+                    {% if datos_ingresos and labels_ingresos and data_values_ingresos %}
+                    <div class="mt-4">
+                        <h5>Resultados de Ingresos</h5>
+                        <div class="chart-container" style="position: relative; height:300px; width:100%">
+                            <canvas id="chartIngresos"></canvas>
+                        </div>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0">Reporte de Utilidad Estimada</h5>
+                </div>
+                <div class="card-body">
+                    <form method="post">
+                        {{ form_utilidad.hidden_tag() }}
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                {{ form_utilidad.fecha_inicio.label(class="form-label") }}
+                                {{ form_utilidad.fecha_inicio(class="form-control") }}
+                                {% for error in form_utilidad.fecha_inicio.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                {{ form_utilidad.fecha_fin.label(class="form-label") }}
+                                {{ form_utilidad.fecha_fin(class="form-control") }}
+                                {% for error in form_utilidad.fecha_fin.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                            </div>
+                            <div class="col-md-12 mb-3">
+                                {{ form_utilidad.doctor_id.label(class="form-label") }}
+                                {{ form_utilidad.doctor_id(class="form-select") }}
+                                {% for error in form_utilidad.doctor_id.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                            </div>
+                        </div>
+                        <div class="d-grid">
+                            {{ form_utilidad.submit_utilidad(class="btn btn-primary") }}
+                        </div>
+                    </form>
+                    
+                    {% if datos_utilidad and labels_utilidad and data_values_utilidad %}
+                    <div class="mt-4">
+                        <h5>Resultados de Utilidad</h5>
+                        <div class="chart-container" style="position: relative; height:300px; width:100%">
+                            <canvas id="chartUtilidad"></canvas>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <h3 class="mt-4 mb-3 text-success"><i class="fas fa-users me-2"></i>Pacientes</h3>
+
+    <div class="row mb-4">
+        <div class="col-lg-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0">Reporte de Pacientes Nuevos</h5>
+                </div>
+                <div class="card-body">
+                    <form method="post">
+                        {{ form_nuevos_pac.hidden_tag() }}
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                {{ form_nuevos_pac.fecha_inicio.label(class="form-label") }}
+                                {{ form_nuevos_pac.fecha_inicio(class="form-control") }}
+                                {% for error in form_nuevos_pac.fecha_inicio.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                {{ form_nuevos_pac.fecha_fin.label(class="form-label") }}
+                                {{ form_nuevos_pac.fecha_fin(class="form-control") }}
+                                {% for error in form_nuevos_pac.fecha_fin.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                            </div>
+                            <div class="col-md-12 mb-3">
+                                {{ form_nuevos_pac.doctor_id.label(class="form-label") }}
+                                {{ form_nuevos_pac.doctor_id(class="form-select") }}
+                                {% for error in form_nuevos_pac.doctor_id.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                            </div>
+                        </div>
+                        <div class="d-grid">
+                            {{ form_nuevos_pac.submit_nuevos_pac(class="btn btn-primary") }}
+                        </div>
+                    </form>
+                    
+                    {% if datos_nuevos_pacientes and labels_nuevos_pac and data_values_nuevos_pac %}
+                    <div class="mt-4">
+                        <h5>Resultados de Pacientes Nuevos</h5>
+                        <div class="chart-container" style="position: relative; height:300px; width:100%">
+                            <canvas id="chartNuevosPacientes"></canvas>
+                        </div>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0">Reporte de Pacientes Frecuentes</h5>
+                </div>
+                <div class="card-body">
+                    <form method="post">
+                        {{ form_pac_frec.hidden_tag() }}
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                {{ form_pac_frec.fecha_inicio.label(class="form-label") }}
+                                {{ form_pac_frec.fecha_inicio(class="form-control") }}
+                                {% for error in form_pac_frec.fecha_inicio.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                {{ form_pac_frec.fecha_fin.label(class="form-label") }}
+                                {{ form_pac_frec.fecha_fin(class="form-control") }}
+                                {% for error in form_pac_frec.fecha_fin.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                {{ form_pac_frec.top_n.label(class="form-label") }}
+                                {{ form_pac_frec.top_n(class="form-control") }}
+                                {% for error in form_pac_frec.top_n.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                            </div>
+                        </div>
+                        <div class="d-grid">
+                            {{ form_pac_frec.submit_pac_frec(class="btn btn-primary") }}
+                        </div>
+                    </form>
+                    
+                    {% if datos_pacientes_frecuentes %}
+                    <div class="mt-4">
+                        <h5>Resultados de Pacientes Frecuentes</h5>
+                        <table class="table table-sm table-striped">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Paciente</th>
+                                    <th>N° Seguimientos</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for pac in datos_pacientes_frecuentes %}
+                                <tr>
+                                    <td>{{ pac.id_px }}</td>
+                                    <td>{{ pac.nombre }} {{ pac.apellidop }}</td>
+                                    <td>{{ pac.numero_seguimientos }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <h3 class="mt-4 mb-3 text-info"><i class="fas fa-clipboard-check me-2"></i>Productividad</h3>
+
+    <div class="row mb-4">
+        <div class="col-lg-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0">Reporte de Seguimientos por Doctor</h5>
+                </div>
+                <div class="card-body">
+                    <form method="post">
+                        {{ form_seguimientos.hidden_tag() }}
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                {{ form_seguimientos.fecha_inicio.label(class="form-label") }}
+                                {{ form_seguimientos.fecha_inicio(class="form-control") }}
+                                {% for error in form_seguimientos.fecha_inicio.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                {{ form_seguimientos.fecha_fin.label(class="form-label") }}
+                                {{ form_seguimientos.fecha_fin(class="form-control") }}
+                                {% for error in form_seguimientos.fecha_fin.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                            </div>
+                            <div class="col-md-12 mb-3">
+                                {{ form_seguimientos.doctor_id.label(class="form-label") }}
+                                {{ form_seguimientos.doctor_id(class="form-select") }}
+                                {% for error in form_seguimientos.doctor_id.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                            </div>
+                        </div>
+                        <div class="d-grid">
+                            {{ form_seguimientos.submit_seguimientos(class="btn btn-primary") }}
+                        </div>
+                    </form>
+                    
+                    {% if datos_seguimientos and labels_seguimientos and data_values_seguimientos %}
+                    <div class="mt-4">
+                        <h5>Resultados de Seguimientos</h5>
+                        <div class="chart-container" style="position: relative; height:300px; width:100%">
+                            <canvas id="chartSeguimientos"></canvas>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0">Reporte de Uso de Planes de Cuidado</h5>
+                </div>
+                <div class="card-body">
+                    <form method="post">
+                        {{ form_uso_planes.hidden_tag() }}
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                {{ form_uso_planes.fecha_inicio.label(class="form-label") }}
+                                {{ form_uso_planes.fecha_inicio(class="form-control") }}
+                                {% for error in form_uso_planes.fecha_inicio.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                {{ form_uso_planes.fecha_fin.label(class="form-label") }}
+                                {{ form_uso_planes.fecha_fin(class="form-control") }}
+                                {% for error in form_uso_planes.fecha_fin.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                            </div>
+                        </div>
+                        <div class="d-grid">
+                            {{ form_uso_planes.submit_uso_planes(class="btn btn-primary") }}
+                        </div>
+                    </form>
+                    
+                    {% if datos_uso_planes and labels_uso_planes and data_values_uso_planes %}
+                    <div class="mt-4">
+                        <h5>Resultados de Uso de Planes</h5>
+                        <div class="chart-container" style="position: relative; height:300px; width:100%">
+                            <canvas id="chartUsoPlanes"></canvas>
+                        </div>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        
+        // Gráfica de Ingresos (CORREGIDA A 'bar')
+        {% if datos_ingresos and labels_ingresos and data_values_ingresos %}
+        const ctxIngresos = document.getElementById('chartIngresos');
+        if (ctxIngresos) {
+            new Chart(ctxIngresos, {
+                type: 'bar', // CAMBIADO de 'pie' a 'bar'
+                data: {
+                    labels: {{ labels_ingresos | safe }},
+                    datasets: [{
+                        label: 'Ingresos ($)',
+                        data: {{ data_values_ingresos | safe }},
+                        backgroundColor: 'rgba(75, 192, 192, 0.6)'
+                    }]
+                },
+                options: {
+                    scales: { y: { beginAtZero: true } },
+                    maintainAspectRatio: false
+                }
+            });
+        }
+        {% endif %}
+
+        // Gráfica de Utilidad
+        {% if datos_utilidad and labels_utilidad and data_values_utilidad %}
+        const ctxUtilidad = document.getElementById('chartUtilidad');
+        if (ctxUtilidad) {
+            new Chart(ctxUtilidad, {
+                type: 'bar',
+                data: {
+                    labels: {{ labels_utilidad | safe }},
+                    datasets: [{
+                        label: 'Utilidad Estimada ($)',
+                        data: {{ data_values_utilidad | safe }},
+                        backgroundColor: 'rgba(255, 99, 132, 0.6)'
+                    }]
+                },
+                options: {
+                    scales: { y: { beginAtZero: true } },
+                    maintainAspectRatio: false
+                }
+            });
+        }
+        {% endif %}
+
+        // Gráfica de Pacientes Nuevos (AÑADIDA)
+        {% if datos_nuevos_pacientes and labels_nuevos_pac and data_values_nuevos_pac %}
+        const ctxNuevosPac = document.getElementById('chartNuevosPacientes');
+        if (ctxNuevosPac) {
+            new Chart(ctxNuevosPac, {
+                type: 'bar',
+                data: {
+                    labels: {{ labels_nuevos_pac | safe }},
+                    datasets: [{
+                        label: 'N° de Pacientes Nuevos',
+                        data: {{ data_values_nuevos_pac | safe }},
+                        backgroundColor: 'rgba(255, 206, 86, 0.6)'
+                    }]
+                },
+                options: {
+                    scales: { y: { beginAtZero: true } },
+                    maintainAspectRatio: false
+                }
+            });
+        }
+        {% endif %}
+
+        // Gráfica de Seguimientos
+        {% if datos_seguimientos and labels_seguimientos and data_values_seguimientos %}
+        const ctxSeguimientos = document.getElementById('chartSeguimientos');
+        if (ctxSeguimientos) {
+            new Chart(ctxSeguimientos, {
+                type: 'bar',
+                data: {
+                    labels: {{ labels_seguimientos | safe }},
+                    datasets: [{
+                        label: 'N° de Seguimientos',
+                        data: {{ data_values_seguimientos | safe }},
+                        backgroundColor: 'rgba(54, 162, 235, 0.6)'
+                    }]
+                },
+                options: {
+                    scales: { y: { beginAtZero: true } },
+                    maintainAspectRatio: false
+                }
+            });
+        }
+        {% endif %}
+
+        // Gráfica de Uso de Planes
+        {% if datos_uso_planes and labels_uso_planes and data_values_uso_planes %}
+        const ctxUsoPlanes = document.getElementById('chartUsoPlanes');
+        if (ctxUsoPlanes) {
+            new Chart(ctxUsoPlanes, {
+                type: 'pie',
+                data: {
+                    labels: {{ labels_uso_planes | safe }},
+                    datasets: [{
+                        label: 'Estado de Planes',
+                        data: {{ data_values_uso_planes | safe }},
+                        backgroundColor: ['rgba(255, 159, 64, 0.6)', 'rgba(75, 192, 192, 0.6)']
+                    }]
+                },
+                options: {
+                    maintainAspectRatio: false
+                }
+            });
+        }
+        {% endif %}
+    });
+</script>
+
+{% endblock %}

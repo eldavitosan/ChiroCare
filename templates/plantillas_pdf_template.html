@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <title>Solicitud de Plantillas - {{ data.patient_nombre }}</title>
+    <style>
+        @page {
+            size: letter portrait;
+            margin: 1cm; /* Reducir un poco el margen si es necesario */
+        }
+        body {
+            font-family: "Helvetica", sans-serif;
+            font-size: 10pt; /* Ligeramente más pequeño para que quepa más */
+            line-height: 1.3; /* Un poco más compacto */
+            color: #333;
+        }
+        .header-table { width: 100%; margin-bottom: 15px; border-bottom: 1px solid #ccc; padding-bottom: 8px; }
+        .header-table td { border: none; padding: 0; vertical-align: middle; }
+        .header-logo-cell { width: 80px; }
+        .header-logo-cell img { max-width: 100%; height: auto; max-height: 45px; }
+        .header-title-cell { text-align: right; }
+        .header-title-cell h1 { font-size: 16pt; color: #1a6a5f; margin: 0 0 2px 0; }
+        .header-title-cell h3 { font-size: 11pt; color: #555; margin: 0; font-weight: normal;}
+
+        .section { margin-bottom: 10px; page-break-inside: avoid; } /* Evitar saltos dentro de secciones */
+        .section h2 { font-size: 13pt; color: #1a6a5f; margin-bottom: 6px; border-bottom: 1px dotted #ccc; padding-bottom: 3px;}
+
+        /* --- Contenedor para dos columnas --- */
+        .two-column-container {
+            display: -webkit-box; /* Usar flexbox para xhtml2pdf */
+            display: flex;
+            -webkit-box-orient: horizontal;
+            -webkit-box-direction: normal;
+            flex-direction: row;
+            -webkit-box-pack: justify;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+        .column {
+            width: 48%; /* Aproximadamente mitad del espacio con un pequeño margen */
+            page-break-inside: avoid;
+        }
+        .info-table { width: 100%; margin-bottom: 5px; }
+        .info-table td { padding: 2px 4px; }
+        .info-table td.label { font-weight: bold; width: 130px; /* Ajustar ancho de etiqueta */ }
+
+        .image-section { margin-top: 10px; text-align: center; page-break-inside: avoid; }
+        .image-section h2 { margin-bottom: 5px;} /* Menos margen para h2 de imágenes */
+        .image-row { /* Contenedor para las imágenes */
+            display: -webkit-box;
+            display: flex;
+            -webkit-box-orient: horizontal;
+            -webkit-box-direction: normal;
+            flex-direction: row;
+            -webkit-box-pack: justify; /* Distribuye espacio entre imágenes */
+            justify-content: space-around; /* O space-between si prefieres */
+            align-items: flex-start; /* Alinea arriba */
+            margin-top: 5px;
+        }
+        .image-container {
+            /* display: inline-block; No necesario con flex */
+            padding: 3px;
+            border: 1px solid #ddd;
+            text-align: center;
+            width: 31%; /* Para que quepan 3 en una fila */
+            max-width: 180px; /* Límite para que no crezcan demasiado */
+            page-break-inside: avoid;
+        }
+        .image-container img {
+            max-width: 100%;
+            max-height: 150px; /* Reducir altura máxima de imagen para que quepan */
+            height: auto;
+            display: block;
+            margin: 0 auto 3px auto;
+        }
+        .image-container p { font-size: 8pt; margin: 0; color: #555; }
+
+        .notes-section { margin-top: 10px; page-break-inside: avoid; }
+        .notes-section h2 { font-size: 13pt; margin-bottom: 4px; }
+        .notes-content {
+            padding: 6px;
+            border: 1px solid #eee;
+            background-color: #f9f9f9;
+            min-height: 40px; /* Reducir altura mínima */
+            white-space: pre-wrap;
+            font-size: 9pt;
+        }
+        .footer-info { position: fixed; bottom: -25px; left: 0cm; right: 0cm; text-align: center; font-size: 8pt; color: #666; border-top: 1px solid #ccc; padding-top: 5px; }
+    </style>
+</head>
+<body>
+
+    <table class="header-table">
+        <tr>
+            <td class="header-logo-cell">
+                {% if data.logo_base64_uri %}
+                    <img src="{{ data.logo_base64_uri }}" alt="Logo">
+                {% else %}
+                    {% if data.centro_info and data.centro_info.nombre != 'N/A' %}
+                        <h4>{{ data.centro_info.nombre }}</h4>
+                    {% endif %}
+                {% endif %}
+            </td>
+            <td class="header-title-cell">
+                <h1>Solicitud para plantillas ortopedicas</h1>
+            </td>
+        </tr>
+    </table>
+
+    <table style="width: 100%; border-collapse: collapse; page-break-inside: avoid;">
+        <tr>
+            <td style="width: 48%; vertical-align: top; padding-right: 2%;"> {# Columna Izquierda #}
+                <div class="section">
+                    <h2>Datos del Paciente</h2>
+                    <table class="info-table">
+                        <tr><td class="label">Nombre:</td><td>{{ data.patient_nombre }}</td></tr>
+                        <tr><td class="label">Edad:</td><td>{{ data.edad }} años</td></tr>
+                        <tr><td class="label">Peso:</td><td>{{ data.peso }} kg</td></tr>
+                    </table>
+                </div>
+            </td>
+            <td style="width: 48%; vertical-align: top; padding-left: 2%;"> {# Columna Derecha #}
+                <div class="section">
+                    <h2>Medidas y Calzado</h2>
+                    <table class="info-table">
+                        <tr><td class="label">Medida Pie (cm):</td><td>{{ '%.1f'|format(data.pie_cm|float) if data.pie_cm is not none else 'N/A' }}</td></tr>
+                        <tr><td class="label">Medida Calzado (cm):</td><td>{{ '%.1f'|format(data.zapato_cm|float) if data.zapato_cm is not none else 'N/A' }}</td></tr>
+                        <tr><td class="label">Tipo de Calzado Usual:</td><td>{{ data.tipo_calzado or 'N/A' }}</td></tr>
+                    </table>
+                </div>
+            </td>
+        </tr>
+    </table>
+
+
+    <div class="section image-section">
+        <h2>Imágenes Podales</h2>
+        <table style="width: 100%; text-align: center;">
+            <tr>
+                {% set images_to_display = [] %}
+                {% if data.foto_pies_general %}{% set images_to_display = images_to_display + [data.foto_pies_general ~ "|Pisada General / Plantografía"] %}{% endif %}
+                {% if data.foto_pies_frontal %}{% set images_to_display = images_to_display + [data.foto_pies_frontal ~ "|Pies Vista Frontal"] %}{% endif %}
+                {% if data.foto_pies_trasera %}{% set images_to_display = images_to_display + [data.foto_pies_trasera ~ "|Pies Vista Trasera / Tobillos"] %}{% endif %}
+    
+                {% if images_to_display %}
+                    {% for image_info_str in images_to_display %}
+                        {% set image_parts = image_info_str.split('|') %}
+                        {% set image_path = image_parts[0] %}
+                        {% set image_caption = image_parts[1] %}
+                        <td style="width: 33%; vertical-align: top; padding: 5px;">
+                            <div class="image-container" style="border: 1px solid #ddd; padding:3px; display:inline-block; max-width:100%;"> {# Simplificado para tabla #}
+                                <img src="{{ url_for('static', filename=image_path, _external=True) }}" alt="{{ image_caption }}"
+                                     style="max-width: 100%; max-height: 140px; height: auto; display: block; margin: 0 auto 3px auto;">
+                                <p style="font-size: 8pt; margin: 0; color: #555;">{{ image_caption }}</p>
+                            </div>
+                        </td>
+                    {% endfor %}
+                    {# Si hay menos de 3 imágenes, añadir celdas vacías para mantener la estructura #}
+                    {% for _ in range(3 - images_to_display|length) %}
+                        <td style="width: 33%;"></td>
+                    {% endfor %}
+                {% else %}
+                    {# Si no hay imágenes, colspan=3 para el mensaje #}
+                    <td colspan="3">
+                        <p style="text-align:center; color:#777; margin-top:10px;">No hay imágenes podales disponibles para este registro.</p>
+                    </td>
+                {% endif %}
+            </tr>
+        </table>
+    </div>
+
+    {% if data.notas_plantillas %}
+    <div class="section notes-section">
+        <h2>Notas para Elaboración de Plantillas</h2>
+        <div class="notes-content">
+            {{ data.notas_plantillas }}
+        </div>
+    </div>
+    {% endif %}
+    
+    <div class="footer-info">
+    {% if data.centro_info and data.centro_info.nombre and data.centro_info.nombre != 'N/A' %} {# Asegurar que nombre exista también #}
+        <strong>{{ data.centro_info.nombre }}</strong><br>
+        {% if data.centro_info.direccion and data.centro_info.direccion != 'N/A' %}
+            {{ data.centro_info.direccion }}<br>
+        {% endif %}
+        
+        {# --- LÍNEA MODIFICADA PARA CEL Y TEL --- #}
+        {% set contact_parts = [] %}
+        {% if data.centro_info.cel %} {# Solo añade si 'cel' tiene un valor (no es None, 0, o cadena vacía) #}
+            {% set _ = contact_parts.append("Cel: " ~ data.centro_info.cel) %}
+        {% endif %}
+        {% if data.centro_info.tel %} {# Solo añade si 'tel' tiene un valor #}
+            {% set _ = contact_parts.append("Tel: " ~ data.centro_info.tel) %}
+        {% endif %}
+        
+        {% if contact_parts %}
+            {{ contact_parts|join(' | ') }} {# Unir con ' | ' solo si hay partes #}
+        {% else %}
+            Contacto no disponible
+        {% endif %}
+        {# --- FIN LÍNEA MODIFICADA --- #}
+
+    {% else %}
+        Chiropractic Care Center (Información de contacto no disponible)
+    {% endif %}
+    <br>Documento generado por Chiropractic Care Center &copy; {{ data.current_year_for_pdf }}
+    </div>
+
+</body>
+</html>

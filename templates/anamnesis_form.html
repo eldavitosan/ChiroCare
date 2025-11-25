@@ -1,0 +1,235 @@
+{% extends 'base.html' %}
+
+{% block title %}Anamnesis - {{ patient.nombre }} {{ patient.apellidop }}{% endblock %}
+
+{% block head_extra %}
+<style>
+    /* Estilos del diagrama (si se movieron de body_diagram_partial.html) */
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        
+        <div class="col-md-3">
+            {% include 'patient-sidebar.html' %}
+        </div>
+
+        <div class="col-md-9">
+            <div class="card shadow-sm mb-4">
+                
+                <div class="card-header d-flex align-items-center justify-content-between">
+                    <h5 class="mb-0">
+                        <i class="fas fa-notes-medical fa-fw me-2"></i>Anamnesis
+                    </h5>
+                    <span>ID Paciente: {{ patient.id_px }}</span>
+                </div>
+
+                <form method="post" novalidate>
+                {{ form.csrf_token }} {{ form.diagrama_puntos(id="diagrama_puntos_hidden") }} <div class="card-body">
+                        
+                        <input type="hidden" name="id_anamnesis" value="{{ loaded_id_anamnesis or '' }}">
+                        <input type="hidden" name="fecha_cargada" value="{{ (fecha_cargada or today_date_obj).strftime('%d/%m/%Y') }}">
+
+
+                        <div class="dropdown mb-3">
+                            <button class="btn btn-outline-secondary dropdown-toggle btn-sm" type="button" id="anamnesisHistoryDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                                Viendo: 
+                                {% if loaded_id_anamnesis %}
+                                    {# Busca el registro cargado en la lista #}
+                                    {% set loaded_record = (all_records_info|selectattr('id_anamnesis', 'equalto', loaded_id_anamnesis)|first) %}
+                                    
+                                    {# Muestra la fecha (que ya viene formateada desde la BD) #}
+                                    {% if loaded_record %}
+                                        {{ loaded_record.fecha }}
+                                    {% else %}
+                                        ID {{ loaded_id_anamnesis }} (Sin fecha)
+                                    {% endif %}
+                                {% else %}
+                                    Nuevo ({{ today_str }})
+                                {% endif %}
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="anamnesisHistoryDropdown">
+                                <li>
+                                    <a class="dropdown-item {% if not loaded_id_anamnesis %}active{% endif %}" 
+                                    href="{{ url_for('clinical.manage_anamnesis', patient_id=patient.id_px) }}">
+                                        + Crear Nuevo ({{ today_str }})
+                                    </a>
+                                </li>
+                                <li><hr class="dropdown-divider"></li>
+                                {% for record in all_records_info %}
+                                <li>
+                                    <a class="dropdown-item {% if loaded_id_anamnesis == record.id_anamnesis %}active{% endif %}"
+                                    href="{{ url_for('clinical.manage_anamnesis', patient_id=patient.id_px, selected_id=record.id_anamnesis) }}">
+                                        {{ record.fecha }}
+                                    </a>
+                                </li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+
+                        {% if not is_editable and loaded_id_anamnesis %}
+                            <div class="alert alert-warning" role="alert">
+                              <i class="fas fa-info-circle me-2"></i>Este registro no puede ser modificado, es solo por historial.
+                            </div>
+                        {% endif %}
+
+                        <hr>
+
+                        <div class="row g-4">
+
+                            <div class="col-lg-7 col-md-6">
+                                <div class="form-section">
+                                    <h5>Condiciones de Salud <small class="text-muted fw-normal">(0-10)</small></h5>
+                                     <div class="mb-3">
+                                        {{ form.condicion1.label(class="form-label") }}
+                                        <div class="d-flex condition-severity-row">
+                                            {{ form.condicion1(class="form-control condition-input", placeholder="Descripción...", readonly=(not is_editable)) }}
+                                            {{ form.calif1(class="form-control severity-input", placeholder="0-10", readonly=(not is_editable)) }}
+                                        </div>
+                                        {% for error in form.condicion1.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                                        {% for error in form.calif1.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                                    </div>
+                                    <div class="mb-3">
+                                        {{ form.condicion2.label(class="form-label") }}
+                                         <div class="d-flex condition-severity-row">
+                                            {{ form.condicion2(class="form-control condition-input", placeholder="Descripción...", readonly=(not is_editable)) }}
+                                            {{ form.calif2(class="form-control severity-input", placeholder="0-10", readonly=(not is_editable)) }}
+                                        </div>
+                                    </div>
+                                     <div class="mb-3">
+                                        {{ form.condicion3.label(class="form-label") }}
+                                        <div class="d-flex condition-severity-row">
+                                            {{ form.condicion3(class="form-control condition-input", placeholder="Descripción...", readonly=(not is_editable)) }}
+                                            {{ form.calif3(class="form-control severity-input", placeholder="0-10", readonly=(not is_editable)) }}
+                                        </div>
+                                    </div>
+                                </div>
+                                </div> 
+
+                            <div class="col-lg-5 col-md-6">
+                                <div class="form-section">
+                                     <h5>Diagrama Corporal <small class="text-muted fw-normal">(Haz clic en las zonas de dolor)</small></h5>
+                                     
+                                     {% include 'body_diagram_partial.html' with context %}
+                                     
+                                 </div>
+                            </div>
+
+                            <div class="col-12">
+                                <div class="form-section">
+                                     <h5>Detalles del Padecimiento</h5>
+                                     <div class="mb-3">
+                                        {{ form.como_comenzo.label(class="form-label") }}
+                                        <div>
+                                            {# WTForms renderizará los radios automáticamente #}
+                                            {% for subfield in form.como_comenzo %}
+                                            <div class="form-check form-check-inline">
+                                                {{ subfield(class="form-check-input", disabled=(not is_editable)) }}
+                                                {{ subfield.label(class="form-check-label") }}
+                                            </div>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                     <div class="mb-3">
+                                        {{ form.primera_vez.label(class="form-label") }}
+                                        {{ form.primera_vez(class="form-control", readonly=(not is_editable)) }}
+                                    </div>
+                                    <div class="mb-3">
+                                        {{ form.alivia.label(class="form-label") }}
+                                        {{ form.alivia(class="form-control", readonly=(not is_editable)) }}
+                                    </div>
+                                    <div class="mb-3">
+                                        {{ form.empeora.label(class="form-label") }}
+                                        {{ form.empeora(class="form-control", readonly=(not is_editable)) }}
+                                    </div>
+                                    <div class="mb-3">
+                                        {{ form.como_ocurrio.label(class="form-label") }}
+                                        {{ form.como_ocurrio(class="form-control", readonly=(not is_editable)) }}
+                                    </div>
+                                    <div class="mb-3">
+                                        {{ form.actividades_afectadas.label(class="form-label") }}
+                                        {{ form.actividades_afectadas(class="form-control", readonly=(not is_editable)) }}
+                                    </div>
+
+                                    <div class="mb-3 checkbox-group">
+                                        {{ form.dolor_intenso_chk.label(class="form-label") }}
+                                        <div>
+                                            {% for subfield in form.dolor_intenso_chk %}
+                                            <div class="form-check form-check-inline">
+                                                <input type="checkbox" class="form-check-input" 
+                                                    id="{{ subfield.id }}" 
+                                                    name="{{ subfield.name }}" 
+                                                    value="{{ subfield.data }}" 
+                                                    {% if subfield.data in form.dolor_intenso_chk.data %}checked{% endif %}
+                                                    {% if not is_editable %}disabled{% endif %}>
+                                                
+                                                <label class="form-check-label" for="{{ subfield.id }}">
+                                                    {{ subfield.label.text }}
+                                                </label>
+                                            </div>
+                                            {% endfor %}
+                                        </div>
+                                        {% for error in form.dolor_intenso_chk.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                                    </div>
+
+
+                                                                        <div class="mb-3 checkbox-group">
+                                        {{ form.tipo_dolor_chk.label(class="form-label") }}
+                                        <div>
+                                            {% for subfield in form.tipo_dolor_chk %}
+                                            <div class="form-check form-check-inline">
+                                                <input type="checkbox" class="form-check-input" 
+                                                    id="{{ subfield.id }}" 
+                                                    name="{{ subfield.name }}" 
+                                                    value="{{ subfield.data }}" 
+                                                    {% if subfield.data in form.tipo_dolor_chk.data %}checked{% endif %}
+                                                    {% if not is_editable %}disabled{% endif %}>
+                                                
+                                                <label class="form-check-label" for="{{ subfield.id }}">
+                                                    {{ subfield.label.text }}
+                                                </label>
+                                            </div>
+                                            {% endfor %}
+                                        </div>
+                                        {% for error in form.tipo_dolor_chk.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                                    </div>
+
+
+                                    <div class="form-section">
+                                        <h5>Historia (Autogenerada)</h5>
+                                        <div class="mb-3">
+                                            {# El valor se poblará desde el 'data' en el form #}
+                                            {{ form.historia(class="form-control", rows=6) }}
+                                            <small class="form-text text-muted">Este texto se genera automáticamente al guardar.</small>
+                                        </div>
+                                    </div> 
+                                 </div> 
+                            </div> </div> 
+
+                        <div class="d-flex justify-content-end mt-4 border-top pt-3">
+                            <a href="{{ url_for('patient.patient_detail', patient_id=patient.id_px) }}" class="btn btn-secondary me-2">Cancelar</a>
+                            {{ form.submit(class="btn btn-primary", disabled=(not is_editable)) }}
+                        </div>
+                        
+                    </div>
+                </form> 
+            </div> 
+        </div> 
+    </div> 
+</div>
+{% endblock %}
+
+
+{% block scripts %}
+{{ super() }}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Inicializar dropdown de fecha
+        
+        // El script para el diagrama corporal ya se carga desde
+        // 'body_diagram_partial.html'
+    });
+</script>
+{% endblock %}

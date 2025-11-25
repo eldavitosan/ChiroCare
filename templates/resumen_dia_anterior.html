@@ -1,0 +1,94 @@
+{% extends 'base.html' %}
+
+{% block title %}Resumen del {{ fecha_resumen }}{% endblock %}
+
+{% block head_extra %}
+<style>
+    .patient-summary {
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        padding: 15px;
+        background-color: #f9f9f9;
+    }
+    .patient-summary h4 {
+        margin-top: 0;
+        color: #0056b3; /* Bootstrap primary color */
+    }
+    .summary-section {
+        margin-bottom: 10px;
+        padding-left: 15px;
+        border-left: 3px solid #eee;
+    }
+    .summary-section strong {
+        display: inline-block;
+        width: 100px; /* Adjust as needed */
+        color: #555;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>Resumen de Atenciones - {{ fecha_resumen }}</h2>
+        <a href="{{ url_for('main') }}" class="btn btn-sm btn-outline-secondary">Volver al Dashboard</a>
+    </div>
+
+    {% if resumen_pacientes %}
+        {% for paciente in resumen_pacientes %}
+        <div class="patient-summary">
+            <h4>
+                <a href="{{ url_for('patient.patient_detail', patient_id=paciente.id_px) }}">
+                    {{ paciente.nombre_completo }}
+                </a>
+            </h4>
+            <div class="summary-section">
+                <strong>Motivo:</strong> {{ paciente.condicion1_anamnesis or 'N/A' }}
+            </div>
+
+            {% if paciente.seguimiento_ayer %}
+                <div class="summary-section">
+                    <h5>Ayer ({{ paciente.seguimiento_ayer.fecha }})</h5>
+                    <p class="mb-1"><strong>Ajustes:</strong> {{ paciente.seguimiento_ayer.segmentos or 'N/A' }}</p>
+                    <p class="mb-1"><strong>Terapias:</strong> {{ paciente.seguimiento_ayer.terapias or 'N/A' }}</p>
+                    <p class="mb-0"><strong>Notas:</strong> {{ paciente.seguimiento_ayer.notas or 'N/A' }}</p>
+                </div>
+            {% else %}
+                <div class="summary-section">
+                    <p class="text-muted"><em>No se encontraron datos del seguimiento de ayer.</em></p>
+                </div>
+            {% endif %}
+
+            {% if paciente.seguimiento_anterior %}
+                <div class="summary-section">
+                    <h5>Visita Anterior ({{ paciente.seguimiento_anterior.fecha }})</h5>
+                    <p class="mb-1"><strong>Ajustes:</strong> {{ paciente.seguimiento_anterior.segmentos or 'N/A' }}</p>
+                    <p class="mb-0"><strong>Terapias:</strong> {{ paciente.seguimiento_anterior.terapias or 'N/A' }}</p>
+                </div>
+            {% else %}
+                <div class="summary-section">
+                    <p class="text-muted small"><em>Sin registro de seguimiento anterior inmediato.</em></p>
+                </div>
+            {% endif %}
+
+            {% if paciente.plan_activo %}
+                <div class="summary-section mt-2 pt-2 border-top">
+                    <h6 class="mb-1 small text-primary">Plan de Cuidado Activo:</h6>
+                    <p class="mb-1"><strong>Plan:</strong> {{ paciente.plan_activo.nombre }}</p>
+                    {% if not paciente.plan_activo.completado %}
+                     <p class="mb-0">
+                         <strong>Sesiones Restantes:</strong>
+                         QP: {{ paciente.plan_activo.qp_restantes }} / TF: {{ paciente.plan_activo.tf_restantes }}
+                     </p>
+            {% endif %}
+        </div>
+        {% else %}
+                 {% endif %}
+        {% endfor %}
+    {% else %}
+        <div class="alert alert-info" role="alert">
+            No se registraron seguimientos para el día {{ fecha_resumen }}.
+        </div>
+    {% endif %}
+
+{% endblock %}

@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Informe Quiropráctico Integral</title>
+    <style>
+        /* --- Configuración General de la Página --- */
+        @page {
+            size: letter;
+            margin: 0.8in;
+            @frame header_frame { -pdf-frame-content: page-header; top: 0.5in; left: 0.8in; right: 0.8in; height: 0.5in; }
+            @frame footer_frame { -pdf-frame-content: page-footer; bottom: 0.5in; left: 0.8in; right: 0.8in; height: 0.5in; }
+        }
+        
+        /* --- Estilos Generales del Cuerpo y Texto --- */
+        body { font-family: "Helvetica", sans-serif; font-size: 11pt; color: #333; }
+        h1, h2 { font-family: "Helvetica Neue", "Helvetica", sans-serif; color: #003366; }
+        h1 { font-size: 18pt; margin-bottom: 20px; }
+        h2 { font-size: 14pt; border-bottom: 2px solid #003366; padding-bottom: 5px; margin-top: 25px; margin-bottom: 10px; }
+        p { line-height: 1.6; text-align: justify; }
+
+        /* --- Estilos para Tablas de Datos --- */
+        .data-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; page-break-inside: avoid; }
+        .data-table th, .data-table td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+        .data-table th { background-color: #eef2f7; font-weight: bold; width: 30%; }
+
+        /* --- Estilos para el Encabezado con Logo --- */
+        #header-table { width: 100%; border: none; margin-bottom: 30px; }
+        #logo-cell { text-align: left; vertical-align: middle; border: none; }
+        #logo { max-width: 140px; max-height: 70px; }
+        #title-cell { width: 75%; text-align: right; vertical-align: middle; border: none; }
+
+        /* --- Estilos para la Rejilla de Imágenes --- */
+        .image-grid { width: 100%; page-break-inside: avoid; }
+        .image-grid td { border: none; text-align: center; vertical-align: top; padding: 10px; }
+        .image-grid img { max-width: 95%; height: auto; border: 1px solid #ccc; }
+        .image-caption { font-size: 9pt; color: #555; margin-top: 5px; }
+
+        /* --- Estilos del Pie de Página --- */
+        #page-footer { text-align: center; font-size: 9pt; color: #888; }
+        #page-header { text-align: right; font-size: 9pt; color: #888; }
+        .footer-line {
+            margin: 0;
+            padding: 2px 0; /* Añade un pequeño espacio vertical entre las líneas */
+        }
+    </style>
+</head>
+<body>
+    <div id="page-header">
+        {% if data.centro_info and data.centro_info.nombre %}{{ data.centro_info.nombre }}{% else %}Informe{% endif %}
+        - {{ data.patient.nombre }} {{ data.patient.apellidop }}
+    </div>
+    <div id="page-footer">
+        <div class="footer-line" style="font-size: 8pt;">
+            {% if data.centro_info and data.centro_info.direccion %}
+                {{ data.centro_info.direccion }}
+            {% endif %}
+            {% if data.centro_info and data.centro_info.tel %}
+                | Tel: {{ data.centro_info.tel }}
+            {% endif %}
+            {% if data.centro_info and data.centro_info.cel %}
+                | Cel: {{ data.centro_info.cel }}
+            {% endif %}
+        </div>
+
+        <div class="footer-line">
+            Página <pdf:pagenumber> de <pdf:pagecount>
+        </div>
+    </div>
+
+    <table id="header-table">
+        <tr>
+            <td id="logo-cell">
+                {% if data.logo_uri %}
+                    <img src="{{ data.logo_uri }}" id="logo" alt="Logo del Centro">
+                {% endif %}
+            </td>
+            <td id="title-cell">
+                <h1>Informe Quiropráctico</h1>
+            </td>
+        </tr>
+    </table>
+
+    <h2>Datos del Paciente</h2>
+    <table class="data-table">
+        <tr>
+            <th>Nombre Completo</th>
+            <td>{{ data.patient.nombre }} {{ data.patient.apellidop }} {{ data.patient.apellidom or '' }}</td>
+        </tr>
+        <tr>
+            <th>Edad</th>
+            <td>{{ data.edad_paciente or 'N/A' }} años</td>
+        </tr>
+        <tr>
+            <th>Fecha del Informe</th>
+            <td>{{ data.today_str }}</td>
+        </tr>
+        <tr>
+            <th>Profesional a Cargo</th>
+            <td>Lic. {{ data.doctor_name or 'No especificado' }}</td>
+        </tr>
+    </table>
+
+    <h2>Resumen Clínico</h2>
+    <table class="data-table">
+        <tr>
+            <th>Síntomas Principales</th>
+            <td>{{ data.anamnesis.condicion1 or 'N/A' }} (Severidad: {{ data.anamnesis.calif1 or 'N/A' }}/10)</td>
+        </tr>
+        <tr>
+            <th>Notas del Examen Físico</th>
+            <td>{{ (data.pruebas.notas_pruebas_ortoneuro or 'Sin notas.') | replace('\n', '<br>') | safe }}</td>
+        </tr>
+    </table>
+
+    <h2>Análisis de Correlación Biomecánica (IA)</h2>
+    <div>
+        {% if data.informe_ia and "Error:" not in data.informe_ia and "bloqueada" not in data.informe_ia %}
+            {{ data.informe_ia | safe }}
+        {% else %}
+            <p><i>El análisis automatizado por IA no pudo ser generado en este momento. La evaluación se basará en la observación directa de las pruebas visuales.</i></p>
+            {% endif %}
+    </div>
+
+    <pdf:nextpage />
+
+    <h2>Análisis Visual de Pruebas</h2>
+    
+    <h3>Análisis Postural</h3>
+    <table class="image-grid">
+        <tr>
+            <td>
+                {% if data.imagenes.frente %}
+                    <img src="{{ data.imagenes.frente }}" alt="Análisis Postural - Vista Frontal">
+                    <div class="image-caption">Vista Frontal</div>
+                {% endif %}
+            </td>
+            <td>
+                {% if data.imagenes.lado %}
+                    <img src="{{ data.imagenes.lado }}" alt="Análisis Postural - Vista Lateral Izquierda">
+                    <div class="image-caption">Vista Lateral Izquierda</div>
+                {% endif %}
+            </td>
+            <td>
+                {% if data.imagenes.postura_extra %}
+                    <img src="{{ data.imagenes.postura_extra }}" alt="Análisis Postural - Vista Lateral Derecha">
+                    <div class="image-caption">Vista Lateral Derecha</div>
+                {% endif %}
+            </td>
+        </tr>
+    </table>
+
+    <h3>Análisis Podal</h3>
+    <table class="image-grid">
+        <tr>
+            <td>
+                {% if data.imagenes.pies_frontal %}
+                    <img src="{{ data.imagenes.pies_frontal }}" alt="Análisis Podal - Vista Frontal de Pies">
+                    <div class="image-caption">Vista Frontal de Pies</div>
+                {% endif %}
+            </td>
+            <td>
+                {% if data.imagenes.pies_trasera %}
+                    <img src="{{ data.imagenes.pies_trasera }}" alt="Análisis Podal - Vista Trasera de Tobillos">
+                    <div class="image-caption">Vista Trasera de Tobillos</div>
+                {% endif %}
+            </td>
+            <td>
+                {% if data.imagenes.pies %}
+                    <img src="{{ data.imagenes.pies }}" alt="Análisis Podal - Plantografía">
+                    <div class="image-caption">Plantografía</div>
+                {% endif %}
+            </td>
+        </tr>
+    </table>
+
+</body>
+</html>

@@ -1,0 +1,290 @@
+{% extends 'base.html' %}
+
+{% block title %}Seguimiento Quiropráctico - {{ patient.nombre }} {{ patient.apellidop }}{% endblock %}
+
+{% block head_extra %}
+<style>
+    .lightbox-overlay {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background-color: rgba(0, 0, 0, 0.9);
+        display: flex; justify-content: center; align-items: center;
+        z-index: 9999; cursor: pointer; padding: 20px;
+        box-sizing: border-box;
+    }
+    .lightbox-image {
+        max-width: 95%; max-height: 95%;
+        object-fit: contain; border: 3px solid white;
+        box-shadow: 0 0 25px rgba(0,0,0,0.5);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        
+        <div class="col-md-3">
+            {% include 'patient-sidebar.html' %}
+        </div>
+
+        <div class="col-md-9">
+            <div class="card shadow-sm mb-4">
+                
+                <div class="card-header d-flex align-items-center justify-content-between">
+                    <h5 class="mb-0">
+                        <i class="fas fa-walking fa-fw me-2"></i>Seguimiento (Ajuste)
+                    </h5>
+                    <span>ID Paciente: {{ patient.id_px }}</span>
+                </div>
+                
+                <form method="post" action="{{ url_for('clinical.manage_seguimiento', patient_id=patient.id_px) }}">
+                    <div class="card-body">
+                        
+                        <input type="hidden" name="id_seguimiento" value="{{ loaded_id_seguimiento or '' }}">
+                        <input type="hidden" name="fecha_cargada" value="{{ current_data.get('fecha', today_str ) }}">
+                        <input type="hidden" name="id_postura_hoy" value="{{ id_postura_hoy_para_form or '' }}">
+
+                        {% if active_plan_status %}
+                            {% set qp_restantes = active_plan_status.qp_restantes %}
+                            {% set tf_restantes = active_plan_status.tf_restantes %}
+                            {% set qp_total = active_plan_status.visitas_qp %}
+                            {% set tf_total = active_plan_status.visitas_tf %}
+                            {% set qp_consumidas = active_plan_status.qp_consumidas %}
+                            {% set tf_consumidas = active_plan_status.tf_consumidas %}
+                            {% set visita_qp_actual = qp_consumidas + 1 %}
+                            {% set usando_terapia_hoy = current_selected_ids and current_selected_ids|length > 1 %}
+                            {% set visita_tf_actual = tf_consumidas + 1 if usando_terapia_hoy else tf_consumidas %}
+
+                            <div class="alert {% if qp_restantes <= 0 %}alert-danger{% elif qp_restantes <= 2 %}alert-warning{% else %}alert-info{% endif %} mb-3" role="alert">
+                                <h5 class="alert-heading" style="font-size: 1.1rem;"><strong>Plan:</strong> {{ active_plan_status.pb_diagnostico or 'Plan Activo' }}</h5>
+                                <p class="mb-0">
+                                    <strong>Ajustes (QP):</strong> 
+                                    <span class="fw-bold fs-5">{{ qp_restantes }}</span> Restantes
+                                    <small class_("text-muted">(Visita <strong>{{ visita_qp_actual }}</strong> de <strong>{{ qp_total }}</strong>)</small>
+                                </p>
+                                <p class="mb-0">
+                                    <strong>Terapias (TF):</strong> 
+                                    <span class="fw-bold fs-5">{{ tf_restantes }}</span> Restantes
+                                    <small class_("text-muted">({{ tf_consumidas }} de {{ tf_total }} completadas)</small>
+                                </p>
+                                {% if qp_restantes <= 0 %}
+                                <div class="fw-bold mt-2">¡Atención! Paciente ha completado sus ajustes (QP) de este plan.</div>
+                                {% endif %}
+                            </div>
+                        {% endif %}
+
+<div class="row mb-3 align-items-center">
+    <div class="col-md-7">
+        <div class="dropdown">
+            <button class="btn btn-outline-secondary dropdown-toggle btn-sm" type="button" id="seguimientoHistoryDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                Viendo: 
+                {% if loaded_id_seguimiento %}
+                    {% set loaded_record = (all_records_info|selectattr('id_seguimiento', 'equalto', loaded_id_seguimiento)|first) %}
+                    {% if loaded_record %}
+                        {{ loaded_record.fecha }}
+                    {% else %}
+                        ID {{ loaded_id_seguimiento }}
+                    {% endif %}
+                {% else %}
+                    Nuevo Registro ({{ today_str }})
+                {% endif %}
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="seguimientoHistoryDropdown">
+                <li>
+                    <a class="dropdown-item {% if not loaded_id_seguimiento %}active{% endif %}" 
+                       href="{{ url_for('clinical.manage_seguimiento', patient_id=patient.id_px) }}">
+                        + Crear Nuevo ({{ today_str }})
+                    </a>
+                </li>
+                <li><hr class="dropdown-divider"></li>
+                {% for record in all_records_info %}
+                <li>
+                    <a class="dropdown-item {% if loaded_id_seguimiento == record.id_seguimiento %}active{% endif %}"
+                       href="{{ url_for('clinical.manage_seguimiento', patient_id=patient.id_px, selected_id=record.id_seguimiento) }}">
+                        {{ record.fecha }}
+                    </a>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+    <div class="col-md-5 text-md-end">
+        <p class="text-muted mb-0"><small><strong>Atendiendo:</strong> Dr. {{ nombre_doctor_sesion or 'N/A' }}</small><br>
+        <small><strong>Fecha Registro:</strong> {{ current_data.get('fecha') or today_str }}</small></p>
+    </div>
+</div>
+                        {% if not is_editable and current_data and current_data.get('id_seguimiento') %}
+                           <div class="alert alert-warning" role="alert">
+                              <i class="fas fa-info-circle me-2"></i>Este registro no puede ser modificado, es solo por historial.
+                           </div>
+                        {% endif %}
+                        
+                        <hr>
+
+                        <div class="form-section mb-3">
+                            <h5>Asociar a Plan de Cuidado</h5>
+                            <select class="form-select form-select-sm" id="id_plan_cuidado_asociado" name="id_plan_cuidado_asociado" {% if not is_editable %}disabled{% endif %}>
+                                <option value="">-- No asociar / Visita fuera de plan --</option>
+                                {% if active_plans_list %}
+                                    {% for plan in active_plans_list %}
+                                        <option value="{{ plan.id_plan }}" {% if plan.id_plan == id_plan_asociado_seleccionado %}selected{% endif %}>
+                                            {{ plan.fecha }} - {{ plan.pb_diagnostico|truncate(40) or '(Sin diagnóstico)' }} (QP: {{plan.visitas_qp}}, TF: {{plan.visitas_tf}})
+                                        </option>
+                                    {% endfor %}
+                                {% else %}
+                                    <option value="" disabled {% if not id_plan_asociado_seleccionado %}selected{% endif %}>-- No hay planes de cuidado activos --</option>
+                                {% endif %}
+                            </select>
+                        </div>
+
+                        {% if show_ortho_notes_field %}
+                            <div class="mb-3">
+                                <label for="notas_pruebas_ortoneuro" class="form-label fw-bold">Notas de Pruebas Ortopédicas (de hoy)</label>
+                                <textarea class="form-control" 
+                                        id="notas_pruebas_ortoneuro" 
+                                        name="notas_pruebas_ortoneuro" 
+                                        rows="3" 
+                                        placeholder="Estas notas se guardarán en el registro de Pruebas de hoy..."
+                                        {% if not is_editable %}disabled{% endif %}>{{ ortho_notes_today or '' }}</textarea>
+                            </div>
+                        {% endif %}
+
+                        <div class="row g-4 mb-4">
+                            <div class="col-md-3 col-lg-2">
+                                <div class="spine-img-container text-center sticky-top">
+                                    <img src="{{ url_for('static', filename='img/columna.png') }}" alt="Columna" style="max-height: 500px;">
+                                </div>
+                            </div>
+                            <div class="col-md-9 col-lg-10">
+                                <div class="form-section">
+                                    <h5>Ajustes Vertebrales</h5>
+                                    <div class="row g-2">
+                                         <div class="col-6 col-sm-4 col-md-4 col-lg segment-input"> <label for="occipital" class="form-label">Occ</label> <input type="text" class="form-control form-control-sm" id="occipital" name="occipital" value="{{ current_data.get('occipital', '') }}" {% if not is_editable %}disabled{% endif %}> <label for="atlas" class="form-label">C1</label> <input type="text" class="form-control form-control-sm" id="atlas" name="atlas" value="{{ current_data.get('atlas', '') }}" {% if not is_editable %}disabled{% endif %}> <label for="axis" class="form-label">C2</label> <input type="text" class="form-control form-control-sm" id="axis" name="axis" value="{{ current_data.get('axis', '') }}" {% if not is_editable %}disabled{% endif %}> <label for="c3" class="form-label">C3</label> <input type="text" class="form-control form-control-sm" id="c3" name="c3" value="{{ current_data.get('c3', '') }}" {% if not is_editable %}disabled{% endif %}> <label for="c4" class="form-label">C4</label> <input type="text" class="form-control form-control-sm" id="c4" name="c4" value="{{ current_data.get('c4', '') }}" {% if not is_editable %}disabled{% endif %}> <label for="c5" class="form-label">C5</label> <input type="text" class="form-control form-control-sm" id="c5" name="c5" value="{{ current_data.get('c5', '') }}" {% if not is_editable %}disabled{% endif %}> </div> 
+                                         <div class="col-6 col-sm-4 col-md-4 col-lg segment-input"> <label for="c6" class="form-label">C6</label> <input type="text" class="form-control form-control-sm" id="c6" name="c6" value="{{ current_data.get('c6', '') }}" {% if not is_editable %}disabled{% endif %}> <label for="c7" class="form-label">C7</label> <input type="text" class="form-control form-control-sm" id="c7" name="c7" value="{{ current_data.get('c7', '') }}" {% if not is_editable %}disabled{% endif %}> <hr class="my-1"> <label for="t1" class="form-label">T1</label> <input type="text" class="form-control form-control-sm" id="t1" name="t1" value="{{ current_data.get('t1', '') }}" {% if not is_editable %}disabled{% endif %}> <label for="t2" class="form-label">T2</label> <input type="text" class="form-control form-control-sm" id="t2" name="t2" value="{{ current_data.get('t2', '') }}" {% if not is_editable %}disabled{% endif %}> <label for="t3" class="form-label">T3</label> <input type="text" class="form-control form-control-sm" id="t3" name="t3" value="{{ current_data.get('t3', '') }}" {% if not is_editable %}disabled{% endif %}> <label for="t4" class="form-label">T4</label> <input type="text" class="form-control form-control-sm" id="t4" name="t4" value="{{ current_data.get('t4', '') }}" {% if not is_editable %}disabled{% endif %}> </div> 
+                                         <div class="col-6 col-sm-4 col-md-4 col-lg segment-input"> <label for="t5" class="form-label">T5</label> <input type="text" class="form-control form-control-sm" id="t5" name="t5" value="{{ current_data.get('t5', '') }}" {% if not is_editable %}disabled{% endif %}> <label for="t6" class="form-label">T6</label> <input type="text" class="form-control form-control-sm" id="t6" name="t6" value="{{ current_data.get('t6', '') }}" {% if not is_editable %}disabled{% endif %}> <label for="t7" class="form-label">T7</label> <input type="text" class="form-control form-control-sm" id="t7" name="t7" value="{{ current_data.get('t7', '') }}" {% if not is_editable %}disabled{% endif %}> <label for="t8" class="form-label">T8</label> <input type="text" class="form-control form-control-sm" id="t8" name="t8" value="{{ current_data.get('t8', '') }}" {% if not is_editable %}disabled{% endif %}> <label for="t9" class="form-label">T9</label> <input type="text" class="form-control form-control-sm" id="t9" name="t9" value="{{ current_data.get('t9', '') }}" {% if not is_editable %}disabled{% endif %}> <label for="t10" class="form-label">T10</label> <input type="text" class="form-control form-control-sm" id="t10" name="t10" value="{{ current_data.get('t10', '') }}" {% if not is_editable %}disabled{% endif %}> <label for="t11" class="form-label">T11</label> <input type="text" class="form-control form-control-sm" id="t11" name="t11" value="{{ current_data.get('t11', '') }}" {% if not is_editable %}disabled{% endif %}> </div> 
+                                         <div class="col-6 col-sm-6 col-md-6 col-lg segment-input"> <label for="t12" class="form-label">T12</label> <input type="text" class="form-control form-control-sm" id="t12" name="t12" value="{{ current_data.get('t12', '') }}" {% if not is_editable %}disabled{% endif %}> <hr class="my-1"> <label for="l1" class="form-label">L1</label> <input type="text" class="form-control form-control-sm" id="l1" name="l1" value="{{ current_data.get('l1', '') }}" {% if not is_editable %}disabled{% endif %}> <label for="l2" class="form-label">L2</label> <input type="text" class="form-control form-control-sm" id="l2" name="l2" value="{{ current_data.get('l2', '') }}" {% if not is_editable %}disabled{% endif %}> <label for="l3" class="form-label">L3</label> <input type="text" class="form-control form-control-sm" id="l3" name="l3" value="{{ current_data.get('l3', '') }}" {% if not is_editable %}disabled{% endif %}> <label for="l4" class="form-label">L4</label> <input type="text" class="form-control form-control-sm" id="l4" name="l4" value="{{ current_data.get('l4', '') }}" {% if not is_editable %}disabled{% endif %}> <label for="l5" class="form-label">L5</label> <input type="text" class="form-control form-control-sm" id="l5" name="l5" value="{{ current_data.get('l5', '') }}" {% if not is_editable %}disabled{% endif %}> </div> 
+                                         <div class="col-6 col-sm-6 col-md-6 col-lg segment-input"> <label for="sacro" class="form-label">Sacro</label> <input type="text" class="form-control form-control-sm" id="sacro" name="sacro" value="{{ current_data.get('sacro', '') }}" {% if not is_editable %}disabled{% endif %}> <label for="coxis" class="form-label">Coxis</label> <input type="text" class="form-control form-control-sm" id="coxis" name="coxis" value="{{ current_data.get('coxis', '') }}" {% if not is_editable %}disabled{% endif %}> <label for="iliaco_d" class="form-label">Iliaco D</label> <input type="text" class="form-control form-control-sm" id="iliaco_d" name="iliaco_d" value="{{ current_data.get('iliaco_d', '') }}" {% if not is_editable %}disabled{% endif %}> <label for="iliaco_i" class="form-label">Iliaco I</label> <input type="text" class="form-control form-control-sm" id="iliaco_i" name="iliaco_i" value="{{ current_data.get('iliaco_i', '') }}" {% if not is_editable %}disabled{% endif %}> <label for="pubis" class="form-label">Pubis</label> <input type="text" class="form-control form-control-sm" id="pubis" name="pubis" value="{{ current_data.get('pubis', '') }}" {% if not is_editable %}disabled{% endif %}> </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row g-4 mb-4">
+                            <div class="col-md-6">
+                                <div class="form-section h-100">
+                                    <h5>Terapia Física Aplicada</h5>
+                                    <div class="therapy-list">
+                                         {% if available_therapies %}
+                                              {% for therapy in available_therapies %}
+                                                 <div class="form-check">
+                                                     <input class="form-check-input" type="checkbox" name="terapia_chk" value="{{ therapy.id_prod }}" id="terapia_{{ therapy.id_prod }}"
+                                                            {% if therapy.id_prod|string in current_selected_ids %}checked{% endif %}
+                                                            {% if not is_editable %}disabled{% endif %}>
+                                                     <label class="form-check-label" for="terapia_{{ therapy.id_prod }}">
+                                                         {{ therapy.nombre }}
+                                                     </label>
+                                                 </div>
+                                              {% endfor %}
+                                         {% else %}
+                                             <p class="text-muted">No hay terapias físicas configuradas.</p>
+                                         {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                             <div class="col-md-6">
+                                <div class="form-section h-100">
+                                    <h5>Notas de la Visita</h5>
+                                    <textarea class="form-control" name="notas" id="notas" rows="5" placeholder="Añada notas de esta visita aquí..." {% if not is_editable %}disabled{% endif %}>{{ current_data.get('notas', '') }}</textarea>
+                                     <h6 class="mt-3 text-muted">Historia Narrativa (Última Anamnesis)</h6>
+                                     <div style="max-height: 150px; overflow-y: auto; font-size: 0.85em; background-color: #e9ecef; padding: 8px; border-radius: 4px; white-space: pre-wrap;">{{ historia_narrativa or 'No disponible.' }}</div>
+                                </div>
+                            </div>
+                        </div> 
+
+                        <div class="row g-4">
+                             <div class="col-12">
+                                 <div class="form-section">
+                                     <h5>Últimas Pruebas Visuales Registradas (Referencia)</h5>
+                                     {% if latest_postura_data and latest_postura_data.id_postura %}
+                                         <p><small class="text-muted">Fotos de la visita del: {{ latest_postura_data.fecha }}</small></p>
+                                         <div class="row text-center g-2 mb-3"> 
+                                            {% set postura_images = [
+                                                ('frente', 'Frontal', latest_postura_data.get('frente')),
+                                                ('lado', 'Lateral', latest_postura_data.get('lado')),
+                                                ('postura_extra', 'Extra', latest_postura_data.get('postura_extra')),
+                                                ('pies', 'Pisada', latest_postura_data.get('pies')),
+                                                ('termografia', 'Termo', latest_postura_data.get('termografia'))
+                                            ] %}
+                                             {% for key, label, path in postura_images %}
+                                                 {% if path %}
+                                                    <div class="col-6 col-sm-4 col-md col-lg-auto"> 
+                                                        <img src="{{ url_for('static', filename=path) }}" alt="{{ label }}" 
+                                                            class="img-thumbnail zoomable-image" 
+                                                            style="height: 80px; width: auto; object-fit: contain; cursor: pointer;"
+                                                            title="Ver {{ label }} (clic para zoom)">
+                                                        <p class="mt-1 mb-0"><small>{{ label }}</small></p>
+                                                    </div>
+                                                {% endif %}
+                                             {% endfor %}
+                                        </div>
+                                     {% else %}
+                                        <p class="text-muted small">Aún no se han registrado fotos de pruebas.</p>
+                                     {% endif %}
+                                     <hr class="my-3"> 
+                                     <h6>Radiografías Recientes</h6>
+                                      {% if latest_rx_list %}
+                                         <div class="row text-center g-2">
+                                             {% for rx in latest_rx_list %}
+                                                <div class="col-6 col-sm-4 col-md col-lg-auto"> 
+                                                        <img src="{{ url_for('static', filename=rx.ruta_archivo) }}" alt="Rx {{ loop.index }}" 
+                                                            class="img-thumbnail zoomable-image" 
+                                                            style="height: 80px; width: auto; object-fit: contain; cursor: pointer;"
+                                                            title="Ver Rx del {{ rx.fecha_visita_asociada }} (clic para zoom)">
+                                                        <p class="mt-1 mb-0"><small>Del: {{ rx.fecha_visita_asociada }}</small></p>
+                                                    </div>
+                                                {% endfor %}
+                                         </div>
+                                      {% else %}
+                                         <p class="text-muted small">No hay radiografías registradas.</p>
+                                      {% endif %}
+                                 </div>
+                            </div>
+                        </div>
+
+                        <div class="d-flex justify-content-end mt-4 border-top pt-3">
+                            <a href="{{ url_for('patient.patient_detail', patient_id=patient.id_px) }}" class="btn btn-secondary me-2">Cancelar</a>
+                            <button type="submit" class="btn btn-primary" {% if not is_editable %}disabled title="Solo editable por admin o si es registro de hoy"{% endif %}>Guardar Seguimiento</button>
+                        </div>
+                        
+                    </div> </form> </div> </div> </div> </div> {% endblock %}
+
+
+{% block scripts %}
+{{ super() }}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        enableImageZoom();
+
+        function enableImageZoom() {
+            const images = document.querySelectorAll('.zoomable-image'); 
+            images.forEach(img => {
+                img.addEventListener('click', handleImageClick);
+            });
+        }
+
+        function handleImageClick(event) {
+            const clickedImage = event.target;
+            const overlay = document.createElement('div');
+            overlay.className = 'lightbox-overlay';
+            const largeImage = document.createElement('img');
+            largeImage.className = 'lightbox-image';
+            largeImage.src = clickedImage.src; 
+            overlay.appendChild(largeImage);
+            document.body.appendChild(overlay);
+            overlay.addEventListener('click', () => {
+                document.body.removeChild(overlay);
+            }, { once: true }); 
+        }
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,20 @@
+# --- Archivos de Sistema y Python ---
+__pycache__/
+*.pyc
+venv/
+venv_py311/
+.DS_Store
+
+# --- Seguridad y Secretos (¡CRÍTICO!) ---
+.env
+ia_config.json
+
+# --- Datos Sensibles de Pacientes ---
+# Ignorar todas las subidas de imágenes
+ChiroCare/src/static/uploads/
+src/static/uploads/
+# (Pongo ambas rutas por si acaso estás en la raíz o dentro de src)
+
+# --- Base de datos local (si se generó algún archivo) ---
+*.db
+*.sqlite3

@@ -1,0 +1,303 @@
+{% extends 'base.html' %}
+
+{% block title %}Reporte de Resultados - {{ patient.nombre }}{% endblock %}
+
+{% block head_extra %}
+<style>
+    body { background-color: #f4f7f6; } /* Fondo suave para la vista de reporte */
+    .report-section {
+        background-color: #ffffff;
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        margin-bottom: 25px;
+        padding: 20px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    }
+    .report-section h4 {
+        color: #004a7c; /* Un azul corporativo */
+        border-bottom: 2px solid #004a7c;
+        padding-bottom: 8px;
+        margin-top: 0;
+        margin-bottom: 15px;
+    }
+    .image-container {
+        display: flex;
+        flex-wrap: wrap; /* Para que las Rx se ajusten */
+        gap: 15px; /* Espacio entre imágenes */
+        justify-content: center; /* Centrar imágenes si no llenan la fila */
+    }
+    .image-item {
+        text-align: center;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        padding: 10px;
+        background-color: #f9f9f9;
+        min-width: 200px; /* Ancho mínimo para Rx */
+        max-width: 32%; /* Ajustar para que quepan ~3 por fila */
+        flex: 1; /* Permite que crezcan */
+    }
+    .image-item img {
+        max-width: 100%;
+        max-height: 350px; /* Altura máxima para consistencia */
+        height: auto;
+        display: block;
+        margin: 0 auto 5px auto;
+    }
+    .image-caption {
+        font-size: 0.8em;
+        color: #555;
+    }
+    #anamnesis-summary {
+        font-size: 1.1em;
+        line-height: 1.6;
+    }
+    /* Estilo para estado de carga */
+    .loading-state {
+        text-align: center;
+        padding: 50px;
+        font-style: italic;
+        color: #888;
+    }
+    .lightbox-overlay {
+        position: fixed; /* Se queda fijo en la pantalla */
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.9); /* Fondo negro semitransparente */
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 9999; /* Asegura que esté por encima de todo */
+        cursor: pointer; /* Indica que se puede hacer clic para cerrar */
+        padding: 20px; /* Espacio alrededor por si la imagen es muy grande */
+        box-sizing: border-box;
+    }
+
+    .lightbox-image {
+        max-width: 95%;
+        max-height: 95%;
+        object-fit: contain; /* Mantiene la proporción */
+        border: 3px solid white;
+        box-shadow: 0 0 25px rgba(0,0,0,0.5);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>Reporte de Resultados: {{ patient.nombre }} {{ patient.apellidop }}</h2>
+        <div>
+             <label for="date-selector" class="me-2">Seleccionar Fecha:</label>
+             <select id="date-selector" class="form-select form-select-sm d-inline-block w-auto">
+                 <option value="">Cargando fechas...</option>
+                 {% for date in available_dates %}
+                     <option value="{{ date }}">{{ date }}</option>
+                 {% endfor %}
+             </select>
+             <a href="{{ url_for('patient.patient_detail', patient_id=patient.id_px) }}" class="btn btn-sm btn-outline-secondary ms-2">Volver</a>
+        </div>
+    </div>
+
+    <div id="report-content">
+        <div class="loading-state">Selecciona una fecha para ver el reporte...</div>
+    </div>
+
+    <template id="report-template">
+        <div class="report-section" id="anamnesis-section">
+            <h4>Resumen de Anamnesis</h4>
+            <div id="anamnesis-summary"></div>
+        </div>
+
+        <div class="report-section" id="postura-section">
+            <h4>Análisis Postural</h4>
+            <div class="image-container" id="postura-images"></div>
+        </div>
+
+        <div class="report-section" id="pisada-section">
+            <h4>Análisis de Pisada</h4>
+            <div class="image-container" id="pisada-images"></div>
+        </div>
+
+        <div class="report-section" id="termografia-section">
+            <h4>Termografía de Espalda</h4>
+            <div class="image-container" id="termografia-images"></div>
+        </div>
+
+        <div class="report-section" id="radiografias-section">
+            <h4>Radiografías</h4>
+            <div class="image-container" id="radiografias-images"></div>
+        </div>
+    </template>
+
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+// El JavaScript irá aquí en el Paso 3
+document.addEventListener('DOMContentLoaded', () => {
+    const dateSelector = document.getElementById('date-selector');
+    const reportContent = document.getElementById('report-content');
+    const reportTemplate = document.getElementById('report-template');
+
+    // Inicializar: cargar la fecha más reciente por defecto
+    if (dateSelector.options.length > 1) {
+        dateSelector.selectedIndex = 1; // La primera fecha real (después de "Cargando...")
+        loadReportData(dateSelector.value);
+    } else {
+        dateSelector.innerHTML = '<option value="">No hay fechas</option>';
+        reportContent.innerHTML = '<div class="alert alert-warning">No hay registros de pruebas para mostrar.</div>';
+    }
+
+    dateSelector.addEventListener('change', (event) => {
+        const selectedDate = event.target.value;
+        if (selectedDate) {
+            loadReportData(selectedDate);
+        } else {
+            reportContent.innerHTML = '<div class="loading-state">Selecciona una fecha...</div>';
+        }
+    });
+
+    async function loadReportData(fecha) {
+        reportContent.innerHTML = '<div class="loading-state">Cargando datos del reporte... <i class="fas fa-spinner fa-spin"></i></div>'; // Icono de carga
+
+        try {
+            const apiUrl = "{{ url_for('clinical.get_reporte_visual_data', patient_id=patient.id_px) }}?fecha=" + encodeURIComponent(fecha);
+            const response = await fetch(apiUrl);
+            if (!response.ok) throw new Error(`Error ${response.status}: ${response.statusText}`);
+            const data = await response.json();
+
+            // Clonamos la plantilla para llenarla
+            const templateNode = reportTemplate.content.cloneNode(true);
+
+            // 1. Llenar Anamnesis
+            const anamnesisDiv = templateNode.getElementById('anamnesis-summary');
+            if (data.anamnesis && data.anamnesis.historia) {
+                anamnesisDiv.innerHTML = `<p><strong>Motivo Principal:</strong> ${data.anamnesis.condicion1 || 'N/A'} (${data.anamnesis.calif1 || 'N/A'}/10)</p><p>${data.anamnesis.historia.replace(/\n/g, '<br>')}</p>`;
+            } else {
+                anamnesisDiv.innerHTML = '<p class="text-muted"><i>No se encontró resumen de anamnesis para esta fecha.</i></p>';
+                templateNode.getElementById('anamnesis-section').style.display = 'none'; // Ocultar sección si no hay datos
+            }
+
+            // Función auxiliar para crear elementos de imagen
+            const createImageItem = (src, caption) => {
+                if (!src) return null;
+                const div = document.createElement('div');
+                div.className = 'image-item';
+                const img = document.createElement('img');
+                img.src = src;
+                img.alt = caption;
+                img.classList.add('zoomable-image');
+                const cap = document.createElement('div');
+                cap.className = 'image-caption';
+                cap.textContent = caption;
+                div.appendChild(img);
+                div.appendChild(cap);
+                return div;
+            };
+
+            // 2. Llenar Postura
+            const posturaContainer = templateNode.getElementById('postura-images');
+            let posturaCount = 0;
+            [
+                { src: data.postura?.frontal, cap: 'Vista Frontal' },
+                { src: data.postura?.lateral, cap: 'Vista Lateral Izquierda' },
+                { src: data.postura?.lateral_der, cap: 'Vista Lateral Derecha' }
+            ].forEach(item => {
+                const imgItem = createImageItem(item.src, item.cap);
+                if (imgItem) {
+                    posturaContainer.appendChild(imgItem);
+                    posturaCount++;
+                }
+            });
+             if (posturaCount === 0) templateNode.getElementById('postura-section').style.display = 'none';
+
+
+            // 3. Llenar Pisada
+            const pisadaContainer = templateNode.getElementById('pisada-images');
+             let pisadaCount = 0;
+            [
+                { src: data.postura?.pies, cap: 'Plantografía' }, // 'pies' es la plantografía
+                { src: data.postura?.pies_trasera, cap: 'Vista Trasera Tobillos' }
+            ].forEach(item => {
+                 const imgItem = createImageItem(item.src, item.cap);
+                 if (imgItem) {
+                     pisadaContainer.appendChild(imgItem);
+                     pisadaCount++;
+                 }
+             });
+            if (pisadaCount === 0) templateNode.getElementById('pisada-section').style.display = 'none';
+
+            // 4. Llenar Termografía
+            const termoContainer = templateNode.getElementById('termografia-images');
+            const termoItem = createImageItem(data.postura?.termografia, 'Escáner Termográfico');
+             if (termoItem) {
+                 termoContainer.appendChild(termoItem);
+             } else {
+                 templateNode.getElementById('termografia-section').style.display = 'none';
+             }
+
+            // 5. Llenar Radiografías
+            const rxContainer = templateNode.getElementById('radiografias-images');
+            if (data.radiografias && data.radiografias.length > 0) {
+                data.radiografias.forEach((rx, index) => {
+                    // Extraer nombre de archivo para el caption
+                    const fileName = rx.src.split('/').pop();
+                    const rxItem = createImageItem(rx.src, `Radiografía ${index + 1}: ${fileName}`);
+                    if (rxItem) rxContainer.appendChild(rxItem);
+                });
+            } else {
+                templateNode.getElementById('radiografias-section').style.display = 'none'; // Ocultar si no hay Rx
+            }
+
+            // Reemplazamos el contenido "Cargando..." con la plantilla llena
+            reportContent.innerHTML = ''; // Limpiamos
+            reportContent.appendChild(templateNode); // Añadimos el contenido nuevo
+
+            enableImageZoom();
+
+        } catch (error) {
+            console.error("Error al cargar datos del reporte:", error);
+            reportContent.innerHTML = `<div class="alert alert-danger">Error al cargar los datos del reporte para la fecha ${fecha}. Por favor, intente de nuevo. (${error.message})</div>`;
+        }
+    }
+    // Funcionalidad de zoom para imágenes
+    function enableImageZoom() {
+        // Seleccionamos todas las imágenes que deben tener zoom
+        const images = reportContent.querySelectorAll('.zoomable-image');
+
+        images.forEach(img => {
+            // Eliminamos listeners anteriores para evitar duplicados si se recargan datos
+            img.removeEventListener('click', handleImageClick); 
+            // Añadimos el listener nuevo
+            img.addEventListener('click', handleImageClick);
+        });
+    }
+
+    function handleImageClick(event) {
+        const clickedImage = event.target;
+
+        // 1. Crear el overlay
+        const overlay = document.createElement('div');
+        overlay.className = 'lightbox-overlay';
+
+        // 2. Crear la imagen ampliada
+        const largeImage = document.createElement('img');
+        largeImage.className = 'lightbox-image';
+        largeImage.src = clickedImage.src; // Usamos la misma fuente
+
+        // 3. Añadir la imagen al overlay
+        overlay.appendChild(largeImage);
+
+        // 4. Añadir el overlay al body
+        document.body.appendChild(overlay);
+
+        // 5. Hacer que se cierre al hacer clic en el overlay
+        overlay.addEventListener('click', () => {
+            document.body.removeChild(overlay);
+        }, { once: true }); // El listener se elimina solo después del primer clic
+    }
+});
+</script>
+{% endblock %}

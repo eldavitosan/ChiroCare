@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    {# Usar data.patient_nombre_completo que ya preparamos, o construirlo desde data.patient #}
+    <title>Plan de Cuidado - {{ data.patient_nombre_completo or (data.patient.nombre ~ " " ~ data.patient.apellidop) }}</title>
+    <style>
+        @page {
+            size: letter portrait;
+            margin: 1.5cm;
+        }
+        body {
+            font-family: "Helvetica", sans-serif; /* O la fuente que prefieras para PDF */
+            font-size: 10pt; /* Ajustado para más contenido */
+            line-height: 1.3; /* Ajustado */
+            color: #333;
+        }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 8px; font-size: 9pt; } /* Ajustado */
+        td, th { padding: 3px 5px; vertical-align: top; text-align: left; } /* Ajustado */
+        .text-right { text-align: right; }
+        .text-center { text-align: center; }
+        .bold { font-weight: bold; }
+        hr.dotted { border: none; border-top: 1px dotted #aaa; margin: 4px 0; }
+
+        .header-table { width: 100%; margin-bottom: 15px; border-bottom: 1px solid #ccc; padding-bottom: 8px; }
+        .header-table td { border: none; padding: 0; vertical-align: middle; }
+        .header-logo-cell { width: 90px; } /* Ajusta según tu logo */
+        .header-logo-cell img { max-width: 100%; height: auto; max-height: 50px; } /* Ajusta según tu logo */
+        .header-title-cell { text-align: right; }
+        .header-title-cell h1 { font-size: 17pt; color: #1a6a5f; margin: 0; } /* Ajustado */
+        .header-title-cell h4 { font-size: 10pt; color: #555; margin: 2px 0 0 0; font-weight: normal;}
+
+
+        .section { margin-bottom: 12px; page-break-inside: avoid; }
+        .section h2 { font-size: 13pt; color: #1a6a5f; margin-bottom: 6px; border-bottom: 1px dotted #ccc; padding-bottom: 3px;}
+        .section h3 { font-size: 11pt; color: #333; margin-top: 10px; margin-bottom: 5px; font-weight: bold;}
+
+        .info-grid td { padding: 2px 5px; } /* Más compacto */
+        .info-grid td.label { font-weight: bold; width: 150px; } /* Ajustado */
+
+        .financial-summary td { padding: 2px 5px; vertical-align: middle;}
+        .financial-summary .label { width: auto; font-weight: normal; }
+        .financial-summary .quantity { width: 50px; text-align: right; padding-right: 5px; font-weight: bold;}
+        .financial-summary .cost-label { width: 70%;} /* Aumentado */
+        .financial-summary .cost-value { width: 30%; text-align: right; }
+        .financial-summary .total-row td { font-weight: bold; border-top: 1px solid #555; padding-top: 3px;}
+        .financial-summary .final-total { font-size: 12pt; }
+        .text-danger { color: #dc3545; }
+        .costos-base { text-align: right; font-size: 7pt; color: #555; margin-top: 8px; }
+
+        .adicionales-container { max-width: 65%; margin-bottom: 12px;} /* Ajustado */
+        .adicionales-table th { background-color: #f2f2f2; text-align: left; border: 1px solid #ccc; font-size: 9pt; }
+        .adicionales-table td { border: 1px solid #ccc; font-size: 9pt; }
+        .adicionales-table td:first-child { width: 75%;} /* Ajustado */
+        .adicionales-table td:nth-child(2) { width: 25%; text-align: right; } /* Ajustado */
+
+        .notes { white-space: pre-wrap; font-size: 9pt; padding: 5px; border: 1px solid #f0f0f0; background-color: #fdfdfd; min-height: 30px;}
+
+        .firma-section { margin-top: 25px; font-size: 10pt; }
+        .firma-section p { margin-bottom: 3px;}
+        .firma-label { margin-left: 20px; }
+        .firma-line-inline { display: inline-block; border-bottom: 1px solid #333; width: 180px; margin-left: 5px; }
+
+        .footer-info { position: fixed; bottom: -30px; left: 0cm; right: 0cm; text-align: center; font-size: 8pt; color: #666; border-top: 1px solid #ccc; padding-top: 5px; }
+    </style>
+</head>
+<body>
+
+    {# --- Header --- #}
+    <table class="header-table">
+        <tr>
+            <td class="header-logo-cell">
+                {% if data.logo_base64_uri %}
+                    <img src="{{ data.logo_base64_uri }}" alt="Logo">
+                {% elif data.centro_info and data.centro_info.nombre and data.centro_info.nombre != 'N/A' %}
+                    <h4 style="color: #1a6a5f; margin:0; font-size:10pt; text-align:left;">{{ data.centro_info.nombre }}</h4>
+                {% else %}
+                    <span style="font-size: 8pt; color: #555;">Chiropractic<br>Care Center</span>
+                {% endif %}
+            </td>
+            <td class="header-title-cell">
+                <h1>Plan de Cuidado Quiropráctico</h1>
+                {% if data.centro_info and data.centro_info.nombre and data.centro_info.nombre != 'N/A' and not data.logo_base64_uri %}
+                     {# Mostrar nombre del centro aquí si no hay logo y sí hay info de centro #}
+                {% elif data.centro_info and data.centro_info.nombre and data.centro_info.nombre != 'N/A' and data.logo_base64_uri %}
+                     <h4>{{ data.centro_info.nombre }}</h4>
+                {% endif %}
+            </td>
+        </tr>
+    </table>
+
+    {# --- Datos del Paciente y Plan --- #}
+    <div class="section">
+        <table class="info-grid">
+            <tr>
+                <td class="label">Fecha del Plan:</td><td>{{ data.plan.fecha or 'N/A' }}</td>
+                <td class="label">Paciente:</td><td>{{ data.patient_nombre_completo }}</td>
+            </tr>
+            <tr>
+                <td class="label">Pb. Diagnóstico:</td><td colspan="3">{{ data.plan.pb_diagnostico or 'N/A' }}</td>
+            </tr>
+            <tr>
+                <td class="label">Etapa de Cuidado:</td>
+                <td colspan="3">{{ data.ETAPA_CUIDADO_MAP.get(data.plan.etapa|int, data.plan.etapa or 'N/A') }}</td>
+            </tr>
+            <tr>
+                <td class="label">Dr. que elabora:</td>
+                <td colspan="3">{{ data.doctor_name or 'No especificado' }}</td>
+            </tr>
+        </table>
+    </div>
+
+    {# --- Tratamiento y Costos --- #}
+    <div class="section tratamiento-section">
+        <h2>Tratamiento Propuesto e Inversión</h2>
+        <table class="info-grid financial-summary">
+             <tr>
+                <td class="label">Sesiones Quiroprácticas (QP):</td>
+                <td class="quantity">{{ data.plan.visitas_qp or 0 }}</td>
+            </tr>
+            <tr>
+                <td class="label">Sesiones Terapia Física (TF):</td>
+                <td class="quantity">{{ data.plan.visitas_tf or 0 }}</td>
+            </tr>
+            <tr><td colspan="2" style="padding: 3px 0;"></td></tr> {# Separador #}
+
+            {% set inversion_bruta = ( (data.plan.visitas_qp or 0) * (data.costo_qp_display or 0) ) + ( (data.plan.visitas_tf or 0) * (data.costo_tf_display or 0) ) %}
+            <tr>
+                <td class="cost-label label">Inversión en Salud (Tratamiento Base):</td>
+                <td class="cost-value">${{ "%.2f"|format(inversion_bruta|float) }}</td>
+            </tr>
+            {% if data.plan.promocion_pct and data.plan.promocion_pct > 0 %}
+            <tr>
+                <td class="cost-label label">Promoción Aplicada:</td>
+                <td class="cost-value">{{ data.plan.promocion_pct }}%</td>
+            </tr>
+            <tr>
+                <td class="cost-label label">Ahorro por Promoción:</td>
+                <td class="cost-value text-danger">(${{ "%.2f"|format(data.plan.ahorro_calculado|float) }})</td>
+            </tr>
+            {% endif %}
+            <tr class="total-row">
+                <td class="cost-label label">Total Plan de Cuidado (Tratamiento Base):</td>
+                <td class="cost-value final-total">${{ "%.2f"|format(data.plan.inversion_total|float) }}</td>
+            </tr>
+        </table>
+        <div class="costos-base">
+            *Costo base por sesión (referencia): QP ${{ "%.2f"|format(data.costo_qp_display|float) }} / TF ${{ "%.2f"|format(data.costo_tf_display|float) }}
+        </div>
+    </div>
+
+    {# --- Adicionales --- #}
+    {% if data.adicionales_seleccionados %}
+    <div class="section adicionales-container">
+        <h3>Adicionales Recomendados</h3>
+        <table class="adicionales-table">
+            <thead>
+                <tr>
+                    <th>Producto/Servicio</th>
+                    <th>Costo Unit.</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for adicional in data.adicionales_seleccionados %}
+                    <tr>
+                        <td>{{ adicional.nombre }}</td>
+                        {# Asumiendo que quieres mostrar el precio de VENTA del adicional #}
+                        <td class="text-right">${{ "%.2f"|format(adicional.venta|float) }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    {# --- Notas --- #}
+    {% if data.plan.notas_plan %}
+    <div class="notes">
+        {{ data.plan.notas_plan | replace('\n', '<br>') | safe }}
+    </div>
+    {% endif %}
+
+    {# --- Firma --- #}
+     <div class="section firma-section" style="page-break-inside: avoid;">
+         <p style="margin-top: 40px;">
+             <span class="firma-label"><span class="data-label">Firma del Paciente (o Tutor):</span><span class="firma-line-inline"></span></span>
+         </p>
+         <p style="margin-top: 40px;">
+             <span class="data-label">QP tratante:</span> {{ data.doctor_name or '____________________' }}
+             <span class="firma-label"><span class="data-label">Firma:</span><span class="firma-line-inline"></span></span>
+         </p>
+     </div>
+
+    {# --- Pie de Página --- #}
+    <div class="footer-info">
+    {% if data.centro_info and data.centro_info.nombre and data.centro_info.nombre != 'N/A' %} {# Asegurar que nombre exista también #}
+        <strong>{{ data.centro_info.nombre }}</strong><br>
+        {% if data.centro_info.direccion and data.centro_info.direccion != 'N/A' %}
+            {{ data.centro_info.direccion }}<br>
+        {% endif %}
+        
+        {# --- LÍNEA MODIFICADA PARA CEL Y TEL --- #}
+        {% set contact_parts = [] %}
+        {% if data.centro_info.cel %} {# Solo añade si 'cel' tiene un valor (no es None, 0, o cadena vacía) #}
+            {% set _ = contact_parts.append("Cel: " ~ data.centro_info.cel) %}
+        {% endif %}
+        {% if data.centro_info.tel %} {# Solo añade si 'tel' tiene un valor #}
+            {% set _ = contact_parts.append("Tel: " ~ data.centro_info.tel) %}
+        {% endif %}
+        
+        {% if contact_parts %}
+            {{ contact_parts|join(' | ') }} {# Unir con ' | ' solo si hay partes #}
+        {% else %}
+            Contacto no disponible
+        {% endif %}
+        {# --- FIN LÍNEA MODIFICADA --- #}
+
+    {% else %}
+        Chiropractic Care Center (Información de contacto no disponible)
+    {% endif %}
+    <br>Documento generado por Chiropractic Care Center &copy; {{ data.current_year_for_pdf }}
+    </div>
+
+</body>
+</html>

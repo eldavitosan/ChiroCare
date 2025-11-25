@@ -1,0 +1,134 @@
+<style>
+    .diagrama-container {
+        position: relative;
+        max-width: 500px;
+        margin: 0 auto;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    .diagrama-container img {
+        display: block;
+        width: 100%;
+        height: auto;
+    }
+
+    /* --- INICIO DE CAMBIOS --- */
+
+    .diagrama-puntos-overlay {
+        /* Esta capa contenedora debe superponerse a la imagen */
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 10; 
+    }
+
+    .diagrama-punto {
+        position: absolute;
+        width: 15px;
+        height: 15px;
+        transform: translate(-50%, -50%);
+        cursor: pointer;
+        border-radius: 50%;
+        transition: all 0.2s ease;
+        background-color: rgba(22, 107, 201, 0.3); /* Fondo azul semitransparente */
+        border: 2px solid rgba(22, 107, 201, 0.7); /* Borde azul sólido */
+        box-sizing: border-box; /* Evita que el borde cambie el tamaño del área de clic */
+        
+    }
+
+    /* --- FIN DE CAMBIOS --- */
+
+    .diagrama-punto:not(.is-editable) {
+        cursor: not-allowed;
+    }
+
+    .diagrama-punto.active::before {
+        content: 'X';
+        display: block;
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 18px;
+        font-weight: bold;
+        color: red;
+        line-height: 1;
+        text-shadow: 0 0 3px white, 0 0 5px white;
+    }
+</style>
+
+<div class="diagrama-container">
+    <img src="{{ url_for('static', filename='img/body_diagram.png') }}" alt="Diagrama Corporal">
+    
+    
+    <div class="diagrama-puntos-overlay">
+        {% if DIAGRAMA_PUNTOS_COORDENADAS %}
+            {% for key, coords in DIAGRAMA_PUNTOS_COORDENADAS.items() %}
+                <a class="diagrama-punto {% if is_editable %}is-editable{% endif %}"
+                   style="top: {{ coords.top }}; left: {{ coords.left }};"
+                   data-key="{{ key }}"
+                   title="{{ key | capitalize }}">
+                </a>
+            {% endfor %}
+        {% else %}
+            <div class="alert alert-danger">Error: DIAGRAMA_PUNTOS_COORDENADAS no está definido.</div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Busca el contenedor específico de ESTE diagrama
+    // Usamos 'body_diagram_partial' como un ID o clase base si hubiera múltiples
+    const thisDiagramContainer = document.querySelector('.diagrama-container'); 
+    if (!thisDiagramContainer) return;
+
+    const inputHidden = document.getElementById('diagrama_puntos_hidden'); 
+
+    // Validación de seguridad (buena práctica)
+    if (!inputHidden) {
+        console.error("Error: No se encontró el campo oculto #diagrama_puntos_hidden. El diagrama no funcionará.");
+        return; 
+    }
+    const allPuntos = thisDiagramContainer.querySelectorAll('.diagrama-punto');
+    
+    let isEditable = false;
+    if (allPuntos.length > 0) {
+        isEditable = allPuntos[0].classList.contains('is-editable');
+    }
+
+    let selectedKeysStr = inputHidden.value || '0,';
+    let selectedKeys = new Set(selectedKeysStr.split(',').filter(k => k && k !== '0'));
+
+    allPuntos.forEach(punto => {
+        const key = punto.dataset.key;
+        if (selectedKeys.has(key)) {
+            punto.classList.add('active');
+        }
+
+        punto.addEventListener('click', function(e) {
+            e.preventDefault();
+            if (!isEditable) return;
+
+            const key = this.dataset.key;
+            if (this.classList.contains('active')) {
+                this.classList.remove('active');
+                selectedKeys.delete(key);
+            } else {
+                this.classList.add('active');
+                selectedKeys.add(key);
+            }
+
+            let newValue = '0,';
+            if (selectedKeys.size > 0) {
+                newValue = '0,' + Array.from(selectedKeys).join(',');
+            }
+            
+            inputHidden.value = newValue;
+        });
+    });
+});
+</script>

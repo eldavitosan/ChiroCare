@@ -1,0 +1,204 @@
+{% extends 'base.html' %}
+
+{% block title %}Comparador de Postura - {{ patient.nombre }}{% endblock %}
+
+{% block head_extra %}
+<style>
+    .lightbox-overlay {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background-color: rgba(0, 0, 0, 0.9);
+        display: flex; justify-content: center; align-items: center;
+        z-index: 9999; cursor: pointer; padding: 20px;
+        box-sizing: border-box;
+    }
+    .lightbox-image {
+        max-width: 95%; max-height: 95%;
+        object-fit: contain; border: 3px solid white;
+        box-shadow: 0 0 25px rgba(0,0,0,0.5);
+    }
+    .comparison-container {
+        display: flex;
+        gap: 20px;
+    }
+    .comparison-column {
+        flex: 1;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 15px;
+        background-color: #f9f9f9;
+    }
+    .image-placeholder {
+        width: 100%;
+        height: 550px; /* Reducido para que quepan 3 imágenes */
+        background-color: #ececec;
+        border: 2px dashed #ccc;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #888;
+        font-style: italic;
+        margin-top: 15px;
+        border-radius: 4px;
+        overflow: hidden; /* Para que la imagen no se desborde */
+    }
+    .image-placeholder img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain; /* Mantiene la proporción de la imagen */
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>Comparador de Postura: {{ patient.nombre }} {{ patient.apellidop }}</h2>
+        <a href="{{ url_for('patient.patient_detail', patient_id=patient.id_px) }}" class="btn btn-sm btn-outline-secondary">Volver a Detalles</a>
+    </div>
+
+    <div class="comparison-container">
+        <div class="comparison-column">
+            <h4>Antes</h4>
+            <select class="form-select" id="select-antes">
+                <option selected disabled>Selecciona una fecha...</option>
+                {% for date in available_dates %}
+                    <option value="{{ date }}">{{ date }}</option>
+                {% endfor %}
+            </select>
+            <div class="image-placeholder" id="placeholder-antes-frontal">
+                <span>Vista Frontal</span>
+            </div>
+            <div class="image-placeholder mt-3" id="placeholder-antes-lateral">
+                <span>Vista Lateral Izquierda</span>
+            </div>
+            <div class="image-placeholder mt-3" id="placeholder-antes-lateral-der">
+                <span>Vista Lateral Derecha</span>
+            </div>
+        </div>
+
+        <div class="comparison-column">
+            <h4>Después</h4>
+            <select class="form-select" id="select-despues">
+                <option selected disabled>Selecciona una fecha...</option>
+                {% for date in available_dates %}
+                    <option value="{{ date }}">{{ date }}</option>
+                {% endfor %}
+            </select>
+            <div class="image-placeholder" id="placeholder-despues-frontal">
+                <span>Vista Frontal</span>
+            </div>
+            <div class="image-placeholder mt-3" id="placeholder-despues-lateral">
+                <span>Vista Lateral Izquierda</span>
+            </div>
+            <div class="image-placeholder mt-3" id="placeholder-despues-lateral-der">
+                <span>Vista Lateral Derecha</span>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Obtenemos los dos menús desplegables
+        const selectAntes = document.getElementById('select-antes');
+        const selectDespues = document.getElementById('select-despues');
+
+        // Esta función es la que hace la magia
+        async function cargarImagenes(fechaSeleccionada, columna) {
+            // 1. Obtenemos los contenedores de imagen para esta columna (AHORA 3)
+            const placeholderFrontal = document.getElementById(`placeholder-${columna}-frontal`);
+            const placeholderLateral = document.getElementById(`placeholder-${columna}-lateral`);
+            const placeholderLateralDer = document.getElementById(`placeholder-${columna}-lateral-der`); // <-- NUEVO
+
+            // 2. Mostramos un texto de "Cargando..." mientras buscamos las fotos (AHORA 3)
+            placeholderFrontal.innerHTML = '<span>Cargando...</span>';
+            placeholderLateral.innerHTML = '<span>Cargando...</span>';
+            placeholderLateralDer.innerHTML = '<span>Cargando...</span>'; // <-- NUEVO
+
+            try {
+                // 3. Llamamos a nuestro "surtidor de imágenes" (la API que creamos en el Paso 2)
+                const response = await fetch("{{ url_for('clinical.get_postura_data_for_date', patient_id=patient.id_px) }}?fecha=" + encodeURIComponent(fechaSeleccionada));
+                
+                if (!response.ok) {
+                    throw new Error('Error al cargar los datos.');
+                }
+                
+                const data = await response.json();
+
+                // 4. Actualizamos la imagen FRONTAL
+                if (data.frontal) {
+                    placeholderFrontal.innerHTML = `<img src="${data.frontal}" alt="Vista Frontal ${fechaSeleccionada}" class="zoomable-image" style="cursor: pointer;">`;
+                } else {
+                    placeholderFrontal.innerHTML = '<span>Vista Frontal no disponible</span>';
+                }
+
+                // 5. Actualizamos la imagen LATERAL IZQUIERDA
+                if (data.lateral) {
+                    placeholderLateral.innerHTML = `<img src="${data.lateral}" alt="Vista Lateral Izquierda ${fechaSeleccionada}" class="zoomable-image" style="cursor: pointer;">`;
+                } else {
+                    placeholderLateral.innerHTML = '<span>Vista Lateral Izquierda no disponible</span>';
+                }
+
+                // 6. ACTUALIZAMOS LA IMAGEN LATERAL DERECHA
+                if (data.lateral_der) {
+                    placeholderLateralDer.innerHTML = `<img src="${data.lateral_der}" alt="Vista Lateral Derecha ${fechaSeleccionada}" class="zoomable-image" style="cursor: pointer;">`;
+                } else {
+                    placeholderLateralDer.innerHTML = '<span>Vista Lateral Derecha no disponible</span>';
+                }
+                enableImageZoom();
+
+            } catch (error) {
+                console.error('Error:', error);
+                placeholderFrontal.innerHTML = '<span style="color: red;">Error al cargar</span>';
+                placeholderLateral.innerHTML = '<span style="color: red;">Error al cargar</span>';
+                placeholderLateralDer.innerHTML = '<span style="color: red;">Error al cargar</span>'; // <-- NUEVO
+            }
+        }
+        function enableImageZoom() {
+            const images = document.querySelectorAll('.zoomable-image');
+            images.forEach(img => {
+                // Limpiamos listeners viejos para evitar duplicados al cambiar de fecha
+                img.removeEventListener('click', handleImageClick); 
+                img.addEventListener('click', handleImageClick);
+            });
+        }
+        function handleImageClick(event) {
+            const clickedImage = event.target;
+            const overlay = document.createElement('div');
+            overlay.className = 'lightbox-overlay'; // <-- Asegúrate de tener este CSS en <head_extra>
+            const largeImage = document.createElement('img');
+            largeImage.className = 'lightbox-image'; // <-- Asegúrate de tener este CSS en <head_extra>
+            largeImage.src = clickedImage.src; 
+            overlay.appendChild(largeImage);
+            document.body.appendChild(overlay);
+            overlay.addEventListener('click', () => {
+                document.body.removeChild(overlay);
+            }, { once: true }); 
+        }
+
+        // 6. Le decimos a JavaScript que ejecute nuestra función cuando el usuario cambie el menú "Antes"
+        selectAntes.addEventListener('change', function() {
+            cargarImagenes(this.value, 'antes');
+        });
+
+        // 7. Hacemos lo mismo para el menú "Después"
+        selectDespues.addEventListener('change', function() {
+            cargarImagenes(this.value, 'despues');
+        });
+
+        // Opcional: Pre-cargar las dos fechas más recientes automáticamente
+        const fechasDisponibles = {{ available_dates | tojson }};
+        if (fechasDisponibles && fechasDisponibles.length >= 2) {
+            // Selecciona la más reciente ("después")
+            selectDespues.value = fechasDisponibles[0];
+            cargarImagenes(fechasDisponibles[0], 'despues');
+            
+            // Selecciona la segunda más reciente ("antes")
+            selectAntes.value = fechasDisponibles[1];
+            cargarImagenes(fechasDisponibles[1], 'antes');
+        }
+
+    });
+</script>
+{% endblock %}

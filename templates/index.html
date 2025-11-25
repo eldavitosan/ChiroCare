@@ -1,0 +1,48 @@
+{% extends 'base.html' %} 
+{% block title %}Iniciar Sesión - Quiropráctico Familiar{% endblock %} 
+
+{% block content %} 
+<div class="row justify-content-center">
+  <div class="col-md-6 col-lg-5"> 
+      <div class="text-center mb-4">
+           <h2 class="mt-3">Iniciar Sesión</h2>
+      </div>
+
+      <form method="post">
+          
+          {{ form.hidden_tag() }}
+
+          <div class="mb-3"> 
+              {{ form.usuario.label(class="form-label") }}
+              {{ form.usuario(class="form-control", id="username") }}
+              {% if form.usuario.errors %}
+                  <div class="invalid-feedback d-block">
+                      {% for error in form.usuario.errors %}
+                          <span>{{ error }}</span>
+                      {% endfor %}
+                  </div>
+              {% endif %}
+          </div>
+          
+          <div class="mb-3">
+              {{ form.contraseña.label(class="form-label") }}
+              {{ form.contraseña(class="form-control", id="password") }}
+              {% if form.contraseña.errors %}
+                  <div class="invalid-feedback d-block">
+                      {% for error in form.contraseña.errors %}
+                          <span>{{ error }}</span>
+                      {% endfor %}
+                  </div>
+              {% endif %}
+          </div>
+          
+          <div class="d-grid"> 
+              {{ form.submit(class="btn btn-primary btn-lg") }}
+          </div>
+      </form>
+  </div>
+</div>
+{% endblock %} 
+
+{% block scripts %}
+{% endblock %}

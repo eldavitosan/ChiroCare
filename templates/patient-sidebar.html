@@ -1,0 +1,82 @@
+<div class="card shadow-sm mb-3">
+    <div class="card-header bg-light text-center">
+        <h5 class="mb-0">{{ patient.nombre }} {{ patient.apellidop }} {{ patient.apellidom }}</h5>
+        <small class="text-muted">ID Paciente: {{ patient.id_px }}</small>
+    </div>
+    <div class="card-body p-0">
+        <div class="list-group list-group-flush">
+            
+            <a href="{{ url_for('patient.patient_detail', patient_id=patient.id_px) }}" 
+               class="list-group-item list-group-item-action {% if request.endpoint == 'patient.patient_detail' %}active{% endif %}">
+               <i class="fas fa-user-circle fa-fw me-2"></i>Resumen del Paciente
+            </a>
+            
+            <a href="{{ url_for('clinical.manage_antecedentes', patient_id=patient.id_px) }}" 
+               class="list-group-item list-group-item-action {% if request.endpoint == 'manage_antecedentes' %}active{% endif %}">
+               <i class="fas fa-file-medical-alt fa-fw me-2"></i>Antecedentes
+            </a>
+            
+            <a href="{{ url_for('clinical.manage_anamnesis', patient_id=patient.id_px) }}" 
+               class="list-group-item list-group-item-action {% if request.endpoint == 'manage_anamnesis' %}active{% endif %}">
+               <i class="fas fa-notes-medical fa-fw me-2"></i>Anamnesis (SOAP)
+            </a>
+            
+            <a href="{{ url_for('clinical.manage_pruebas', patient_id=patient.id_px) }}" 
+               class="list-group-item list-group-item-action {% if request.endpoint == 'manage_pruebas' %}active{% endif %}">
+               <i class="fas fa-camera fa-fw me-2"></i>Pruebas (Objetivo)
+            </a>
+
+            <a href="{{ url_for('clinical.manage_seguimiento', patient_id=patient.id_px) }}" 
+               class="list-group-item list-group-item-action {% if request.endpoint == 'manage_seguimiento' %}active{% endif %}">
+               <i class="fas fa-walking fa-fw me-2"></i>Seguimiento (Ajuste)
+            </a>
+
+            <a href="{{ url_for('clinical.manage_revaloracion', patient_id=patient.id_px) }}" 
+               class="list-group-item list-group-item-action {% if request.endpoint == 'manage_revaloracion' %}active{% endif %}">
+               <i class="fas fa-chart-line fa-fw me-2"></i>Revaloración (Subjetivo)
+            </a>
+
+            <a href="{{ url_for('clinical.manage_plan_cuidado', patient_id=patient.id_px) }}" 
+               class="list-group-item list-group-item-action {% if request.endpoint == 'manage_plan_cuidado' %}active{% endif %}">
+               <i class="fas fa-clipboard-list fa-fw me-2"></i>Plan de Cuidado
+            </a>
+
+            <a href="{{ url_for('clinical.manage_recibos', patient_id=patient.id_px) }}" 
+               class="list-group-item list-group-item-action {% if request.endpoint == 'manage_recibos' %}active{% endif %}">
+               <i class="fas fa-file-invoice-dollar fa-fw me-2"></i>Recibos / Pagos
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="card shadow-sm mb-3">
+    <div class="card-header bg-light">
+        <h6 class="mb-0">Herramientas</h6>
+    </div>
+    <div class="card-body p-0">
+        <div class="list-group list-group-flush">
+            <a href="{{ url_for('clinical.comparador_postura', patient_id=patient.id_px) }}" 
+               class="list-group-item list-group-item-action {% if request.endpoint == 'comparador_postura' %}active{% endif %}">
+               <i class="fas fa-images fa-fw me-2"></i>Comparador Postural
+            </a>
+            <a href="{{ url_for('clinical.reporte_visual_fechado', patient_id=patient.id_px) }}" 
+               class="list-group-item list-group-item-action {% if request.endpoint == 'reporte_visual_fechado' %}active{% endif %}">
+               <i class="fas fa-chart-pie fa-fw me-2"></i>Reporte Visual
+            </a>
+        </div>
+    </div>
+</div>
+<div class="list-group-item list-group-item-action p-3 bg-light">
+    <label for="new_general_note_text" class="form-label fw-bold"><i class="fas fa-sticky-note me-1"></i> Nota Rápida</label>
+    <textarea class="form-control form-control-sm" 
+              id="new_general_note_text" 
+              rows="3" 
+              placeholder="Escribe un recordatorio para la próxima visita..."></textarea>
+    <button class="btn btn-primary btn-sm w-100 mt-2" 
+            id="save-general-note-btn" 
+            type="button"
+            data-patient-id="{{ patient.id_px }}">
+        Guardar Nota
+    </button>
+    <div id="note-save-status" class="form-text small mt-1" style="display: none;"></div>
+</div>

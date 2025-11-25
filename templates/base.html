@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Chiropractic Care Cuautitlan{% endblock %}</title>
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='bootstrap/css/bootstrap.min.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='fontawesome/css/all.min.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+
+    <style>
+      body { padding-top: 56px; /* Ajuste para la barra de navegación fija */ background-color: #f8f9fa; }
+      .content-container { padding: 20px; }
+      .main-content { max-width: 960px; margin: auto; background-color: #ffffff; padding: 30px; border-radius: 8px; box-shadow: 0 0 15px rgba(0,0,0,0.1); margin-top: 20px; }
+    </style>
+    {% block head_extra %}{% endblock %} </head>
+  <body>
+
+    <nav class="navbar navbar-expand-lg navbar-dark fixed-top" style="background-color: #2a9d8f;"> <div class="container-fluid">
+        <a class="navbar-brand" href="{{ url_for('main' if session.get('id_dr') else 'auth.login') }}">
+          <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Logo" height="30" class="d-inline-block align-text-top me-2">
+          Chiropractic Care Cuautitlan </a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+          <ul class="navbar-nav ms-auto"> 
+            {% if session.get('id_dr') %}
+              <li class="nav-item">
+                <span class="navbar-text me-3"> Hola Lic.  {{ session.get('nombre_dr', session.get('usuario')) }}
+                  {# Añadir badge si es admin #}
+                  {% if session.get('is_admin') %}
+                      <span class="badge bg-info ms-2">Administrador</span> {# Insignia Admin #}
+                  {% endif %}
+                </span>
+              </li>
+              {% if session.get('is_admin') %}
+              <li class="nav-item"> <a class="nav-link" href="{{ url_for('admin.admin_dashboard') }}">Dashboard</a>
+              </li>
+              {% endif %}
+               <li class="nav-item"> <a class="nav-link" href="{{ url_for('patient.add_patient_route') }}">Nuevo Paciente</a>
+              </li>
+              <li class="nav-item"> <a class="nav-link" href="{{ url_for('auth.logout') }}">Cerrar Sesión</a>
+              </li>
+            {% else %}
+              <li class="nav-item">
+                <a class="nav-link" href="{{ url_for('auth.login') }}">Iniciar Sesión</a>
+              </li>
+            {% endif %}
+          </ul>
+        </div>
+      </div>
+    </nav>
+
+    <div class="container content-container">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            {% for category, message in messages %}
+              <div class="alert alert-{{ category }} alert-dismissible fade show mt-3" role="alert">
+                  {{ message }}
+                  <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+              </div>
+            {% endfor %}
+          {% endif %}
+        {% endwith %}
+
+        <div class="main-content">
+             {% block content %}{% endblock %}
+        </div>
+    </div>
+
+    {% block scripts %}
+      <script src="{{ url_for('static', filename='bootstrap/js/bootstrap.bundle.min.js') }}"></script>
+      <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+
+      <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            
+            const saveNoteBtn = document.getElementById('save-general-note-btn');
+            const noteTextarea = document.getElementById('new_general_note_text');
+            const noteStatus = document.getElementById('note-save-status');
+
+            if (saveNoteBtn && noteTextarea && noteStatus) {
+                
+                // --- Lógica para encontrar el CSRF Token ---
+                let csrfToken = "";
+                // WTForms usualmente lo renderiza con 'name="csrf_token"'
+                const csrfInput = document.querySelector('input[name="csrf_token"]'); 
+                if (csrfInput) {
+                    csrfToken = csrfInput.value;
+                } else {
+                    console.warn("No se encontró el input CSRF Token. La API de 'Guardar Nota' podría fallar.");
+                }
+                // --- Fin Lógica CSRF ---
+
+                saveNoteBtn.addEventListener('click', async function() {
+                    const noteText = noteTextarea.value;
+                    const patientId = this.dataset.patientId;
+
+                    if (!noteText.trim()) {
+                        noteStatus.textContent = 'La nota está vacía.';
+                        noteStatus.className = 'form-text small mt-1 text-danger';
+                        noteStatus.style.display = 'block';
+                        return;
+                    }
+
+                    // Deshabilitar botón
+                    saveNoteBtn.disabled = true;
+                    saveNoteBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
+                    noteStatus.style.display = 'none';
+
+                    try {
+                        // Usamos la URL de la API que creamos
+                        const response = await fetch(`/paciente/${patientId}/api/add_note`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRFToken': csrfToken // Pasa el token CSRF leído
+                            },
+                            body: JSON.stringify({ note_text: noteText })
+                        });
+
+                        const result = await response.json();
+
+                        if (response.ok && result.success) {
+                            noteStatus.textContent = result.message + ' Se mostrará al cargar la página.';
+                            noteStatus.className = 'form-text small mt-1 text-success';
+                            noteTextarea.value = ''; // Limpiar el textarea
+                        } else {
+                            noteStatus.textContent = result.message || 'Error al guardar.';
+                            noteStatus.className = 'form-text small mt-1 text-danger';
+                        }
+
+                    } catch (error) {
+                        console.error("Error en fetch (guardar nota):", error);
+                        noteStatus.textContent = 'Error de red al guardar.';
+                        noteStatus.className = 'form-text small mt-1 text-danger';
+                    } finally {
+                        // Habilitar botón después de 2 segundos
+                        setTimeout(() => {
+                            saveNoteBtn.disabled = false;
+                            saveNoteBtn.innerHTML = 'Guardar Nota';
+                            noteStatus.style.display = 'block';
+                        }, 2000);
+                    }
+                });
+            }
+        });
+      </script>
+      {% endblock %}
+  </body>
+</html>

@@ -1,0 +1,139 @@
+{% extends 'base.html' %} 
+{% block title %}Editar Datos del Paciente{% endblock %} 
+
+{% block content %} 
+<h1 class="mb-4">Editar Paciente: {{ patient.nombre }} {{ patient.apellidop }}</h1>
+
+<form method="post">
+    {{ form.hidden_tag() }}
+
+    <div class="row g-3"> 
+        
+        <div class="col-md-6">
+            {{ form.comoentero.label(class="form-label") }}
+            {{ form.comoentero(class="form-control") }}
+            {% for error in form.comoentero.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+        </div>
+         <div class="col-md-6"> </div>
+
+        <div class="col-md-4">
+            {{ form.nombre.label(class="form-label") }}
+            {{ form.nombre(class="form-control") }}
+            {% for error in form.nombre.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+        </div>
+
+        <div class="col-md-4">
+            {{ form.apellidop.label(class="form-label") }}
+            {{ form.apellidop(class="form-control") }}
+            {% for error in form.apellidop.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+        </div>
+
+        <div class="col-md-4">
+            {{ form.apellidom.label(class="form-label") }}
+            {{ form.apellidom(class="form-control") }}
+            {% for error in form.apellidom.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+        </div>
+
+        <div class="col-md-6">
+            {{ form.nacimiento.label(class="form-label") }}
+            {{ form.nacimiento(class="form-control", id="nacimiento") }}
+            {% for error in form.nacimiento.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+        </div>
+
+        <div class="col-md-6">
+            <label for="edad" class="form-label">Edad:</label>
+            <input type="number" class="form-control" id="edad" name="edad_display" readonly>
+        </div>
+
+        <div class="col-12">
+            {{ form.direccion.label(class="form-label") }}
+            {{ form.direccion(class="form-control") }}
+            {% for error in form.direccion.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+        </div>
+
+        <div class="col-md-6">
+            {{ form.estadocivil.label(class="form-label") }}
+            {{ form.estadocivil(class="form-control") }}
+        </div>
+        
+        <div class="col-md-6">
+            {{ form.ocupacion.label(class="form-label") }}
+            {{ form.ocupacion(class="form-control") }}
+        </div>
+
+        <div class="col-12">
+            {{ form.hijos.label(class="form-label") }}
+            {{ form.hijos(class="form-control") }}
+        </div>
+
+        <div class="col-md-6">
+            {{ form.telcasa.label(class="form-label") }}
+            {{ form.telcasa(class="form-control") }}
+             {% for error in form.telcasa.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+        </div>
+
+        <div class="col-md-6">
+            {{ form.cel.label(class="form-label") }}
+            {{ form.cel(class="form-control") }}
+             {% for error in form.cel.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+        </div>
+
+        <div class="col-md-6">
+            {{ form.correo.label(class="form-label") }}
+            {{ form.correo(class="form-control") }}
+             {% for error in form.correo.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+        </div>
+
+        <div class="col-12">
+            <hr class="my-4"> <h4>Contacto de Emergencia</h4>
+        </div>
+
+        <div class="col-md-4">
+            {{ form.contacto.label(class="form-label") }}
+            {{ form.contacto(class="form-control") }}
+        </div>
+
+        <div class="col-md-4">
+            {{ form.parentesco.label(class="form-label") }}
+            {{ form.parentesco(class="form-control") }}
+        </div>
+
+        <div class="col-md-4">
+            {{ form.emergencia.label(class="form-label") }}
+            {{ form.emergencia(class="form-control") }}
+             {% for error in form.emergencia.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+        </div>
+
+    </div> 
+
+    <div class="d-flex justify-content-end mt-4">
+         <a href="{{ url_for('patient.patient_detail', patient_id=patient.id_px) }}" class="btn btn-secondary me-2">Cancelar</a>
+         {{ form.submit(class="btn btn-primary", value="Actualizar Datos") }} </div>
+</form>
+{% endblock %} 
+
+{% block scripts %}
+{{ super() }} {# Importante para incluir app.js desde base.html #}
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const nacimientoInput = document.getElementById('nacimiento');
+        const edadDisplayInput = document.getElementById('edad');
+
+        function actualizarEdad() {
+            if (nacimientoInput.value && typeof calcularEdad === 'function') {
+                edadDisplayInput.value = calcularEdad(nacimientoInput.value);
+            } else {
+                edadDisplayInput.value = '';
+            }
+        }
+
+        if (nacimientoInput && edadDisplayInput) {
+            nacimientoInput.addEventListener('change', actualizarEdad);
+            
+            // Calcular edad al cargar la página (el campo ya viene poblado)
+            actualizarEdad();
+        }
+    });
+</script>
+{% endblock %}

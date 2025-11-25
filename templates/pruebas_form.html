@@ -1,0 +1,282 @@
+{% extends 'base.html' %}
+
+{% block title %}Pruebas - {{ patient.nombre }} {{ patient.apellidop }}{% endblock %}
+
+{% block head_extra %}
+<style>
+    /* Estilos del Lightbox para Zoom */
+    .lightbox-overlay {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background-color: rgba(0, 0, 0, 0.9);
+        display: flex; justify-content: center; align-items: center;
+        z-index: 9999; cursor: pointer; padding: 20px;
+        box-sizing: border-box;
+    }
+    .lightbox-image {
+        max-width: 95%; max-height: 95%;
+        object-fit: contain; border: 3px solid white;
+        box-shadow: 0 0 25px rgba(0,0,0,0.5);
+    }
+    .image-preview {
+        max-height: 80px;
+        max-width: 100px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        object-fit: cover;
+        cursor: pointer;
+        transition: transform 0.2s;
+    }
+    .image-preview:hover {
+        transform: scale(1.05);
+    }
+    .full-width-section {
+        padding-bottom: 20px;
+        margin-bottom: 20px;
+        border-bottom: 1px solid #eee;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        
+        <div class="col-md-3">
+            {% include 'patient-sidebar.html' %}
+        </div>
+
+        <div class="col-md-9">
+            <div class="card shadow-sm mb-4">
+                
+                <div class="card-header d-flex align-items-center justify-content-between">
+                    <h5 class="mb-0">
+                        <i class="fas fa-camera fa-fw me-2"></i>Pruebas y Exámenes (Objetivo)
+                    </h5>
+                    <span>ID Paciente: {{ patient.id_px }}</span>
+                </div>
+                
+                <form method="post" action="{{ url_for('clinical.manage_pruebas', patient_id=patient.id_px) }}" enctype="multipart/form-data">
+                    <div class="card-body">
+                        
+                        <input type="hidden" name="fecha_cargada" value="{{ loaded_date }}">
+                        <input type="hidden" name="id_postura" value="{{ current_data.get('id_postura', '') }}">
+
+                        <div class="dropdown mb-3">
+                            <button class="btn btn-outline-secondary dropdown-toggle btn-sm" type="button" id="pruebasHistoryDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                                Viendo: 
+                                {% if loaded_date == today_str %}
+                                    {% if current_data.get('id_postura') %}
+                                        Editando Hoy ({{ today_str }})
+                                    {% else %}
+                                        Nuevo ({{ today_str }})
+                                    {% endif %}
+                                {% else %}
+                                    {{ loaded_date }}
+                                {% endif %}
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="pruebasHistoryDropdown">
+                                <li>
+                                    <a class="dropdown-item {% if loaded_date == today_str %}active{% endif %}" 
+                                       href="{{ url_for('clinical.manage_pruebas', patient_id=patient.id_px, fecha='hoy') }}">
+                                        + 
+                                        {% if loaded_date == today_str and current_data.get('id_postura') %}
+                                            Editando Hoy ({{ today_str }})
+                                        {% else %}
+                                            Crear Nuevo / Ir a Hoy ({{ today_str }})
+                                        {% endif %}
+                                    </a>
+                                </li>
+                                <li><hr class="dropdown-divider"></li>
+                                {% for date_option in available_dates %}
+                                    {% if date_option != today_str %} 
+                                    <li>
+                                        <a class="dropdown-item {% if date_option == loaded_date %}active{% endif %}"
+                                           href="{{ url_for('clinical.manage_pruebas', patient_id=patient.id_px, fecha=date_option) }}">
+                                            {{ date_option }}
+                                        </a>
+                                    </li>
+                                    {% endif %}
+                                {% endfor %}
+                            </ul>
+                        </div>
+
+                        {% set is_past_date = not is_admin and loaded_date != today_str %}
+                        {% if is_past_date and current_data.get('id_postura') %}
+                           <div class="alert alert-info mt-3" role="alert">
+                             <i class="fas fa-info-circle me-2"></i>Nota: Estás viendo un registro pasado. Solo puedes añadir datos faltantes o nuevas Rx. Los campos con datos existentes no se pueden modificar.
+                           </div>
+                        {% elif not is_fully_editable and loaded_date != today_str %}
+                             <div class="alert alert-warning mt-3" role="alert">
+                                <i class="fas fa-lock me-2"></i>Estás viendo un registro pasado. Modo solo lectura.
+                            </div>
+                        {% endif %}
+                        
+                        <hr>
+
+                        <div class="form-section full-width-section">
+                            <h5>Notas de Pruebas Ortopédicas y Neurológicas</h5>
+                            <textarea class="form-control" name="notas_pruebas_ortoneuro" id="notas_pruebas_ortoneuro" rows="4"
+                                      placeholder="Describa los hallazgos de las pruebas ortopédicas y neurológicas..."
+                                      {% if not is_fully_editable and current_data.get('notas_pruebas_ortoneuro') is not none %}disabled title="Notas existentes, no modificables."{% endif %}>{{ current_data.get('notas_pruebas_ortoneuro') or '' }}</textarea>
+                            {% if not is_fully_editable and current_data.get('notas_pruebas_ortoneuro') is none %}
+                                <small class="form-text text-muted">Puedes añadir notas aquí, ya que el campo estaba vacío.</small>
+                            {% endif %}
+                            </div>
+                        
+                        <div class="row g-4">
+                            <div class="col-lg-6">
+                                <div class="form-section">
+                                    <h5>Examen de Postura</h5>
+                                    <div class="image-preview-container">
+                                        <label for="foto_frente" class="form-label col-4"><b>Foto Frontal:</b></label>
+                                        <input type="file" class="form-control form-control-sm" name="foto_frente" accept="image/*" {% if is_past_date and current_data.get('frente') %}disabled{% endif %}>
+                                        {% if current_data.get('frente') %}
+                                            <img src="{{ url_for('static', filename=current_data.get('frente')) }}" alt="Vista Frontal" class="image-preview zoomable-image">
+                                        {% endif %}
+                                    </div>
+                                    <div class="image-preview-container">
+                                        <label for="foto_lado" class="form-label col-4"><b>Foto Lateral Izq:</b></label>
+                                        <input type="file" class="form-control form-control-sm" name="foto_lado" accept="image/*" {% if is_past_date and current_data.get('lado') %}disabled{% endif %}>
+                                        {% if current_data.get('lado') %}
+                                            <img src="{{ url_for('static', filename=current_data.get('lado')) }}" alt="Vista Lateral" class="image-preview zoomable-image">
+                                        {% endif %}
+                                    </div>
+                                    <div class="image-preview-container">
+                                        <label for="foto_postura3" class="form-label col-4"><b>Foto Lateral Der:</b></label>
+                                        <input type="file" class="form-control form-control-sm" name="foto_postura3" accept="image/*" {% if is_past_date and current_data.get('postura_extra') %}disabled{% endif %}>
+                                        {% if current_data.get('postura_extra') %}
+                                            <img src="{{ url_for('static', filename=current_data.get('postura_extra')) }}" alt="Postura Extra" class="image-preview zoomable-image">
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                <div class="form-section">
+                                    <h5>Escáner de Espalda (Termografía)</h5>
+                                    <div class="image-preview-container">
+                                        <label for="foto_termografia" class="form-label col-4">Imagen:</label>
+                                        <input type="file" class="form-control form-control-sm" name="foto_termografia" accept="image/*" {% if is_past_date and current_data.get('termografia') %}disabled{% endif %}>
+                                        {% if current_data.get('termografia') %}
+                                            <img src="{{ url_for('static', filename=current_data.get('termografia')) }}" alt="Termografía" class="image-preview zoomable-image">
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-lg-6">
+                                <div class="form-section">
+                                    <h5>Examen de Pisada y Datos Podales</h5>
+                                    <div class="image-preview-container">
+                                        <label for="foto_pies_frontal" class="form-label col-4">Pies Frontal:</label>
+                                        <input type="file" class="form-control form-control-sm" name="foto_pies_frontal" accept="image/*" {% if is_past_date and current_data.get('pies_frontal') %}disabled{% endif %}>
+                                         {% if current_data.get('pies_frontal') %}
+                                            <img src="{{ url_for('static', filename=current_data.pies_frontal) }}" alt="Pies Frontal" class="image-preview zoomable-image">
+                                         {% endif %}
+                                    </div>
+                                     <div class="image-preview-container">
+                                        <label for="foto_pies_trasera" class="form-label col-4">Pies Trasera:</label>
+                                        <input type="file" class="form-control form-control-sm" name="foto_pies_trasera" accept="image/*" {% if is_past_date and current_data.get('pies_trasera') %}disabled{% endif %}>
+                                        {% if current_data.get('pies_trasera') %}
+                                            <img src="{{ url_for('static', filename=current_data.pies_trasera) }}" alt="Pies Trasera" class="image-preview zoomable-image">
+                                        {% endif %}
+                                    </div>
+                                    <div class="image-preview-container">
+                                        <label for="foto_pisada" class="form-label col-4">Plantigrafia:</label>
+                                        <input type="file" class="form-control form-control-sm" name="foto_pisada" accept="image/*" {% if is_past_date and current_data.get('pies') %}disabled{% endif %}>
+                                        {% if current_data.get('pies') %}
+                                            <img src="{{ url_for('static', filename=current_data.pies) }}" alt="Pisada General" class="image-preview zoomable-image">
+                                        {% endif %}
+                                    </div>
+                                    <hr>
+                                    <div class="row">
+                                        <div class="col-sm-4"><label for="pie_cm" class="form-label">Pie (cm):</label><input type="number" step="0.1" class="form-control form-control-sm" name="pie_cm" value="{{ '%.1f'|format(current_data.get('pie_cm')|float) if current_data.get('pie_cm') is not none else '' }}" {% if not is_fully_editable and current_data.get('pie_cm') is not none %}disabled{% endif %}></div>
+                                        <div class="col-sm-4"><label for="zapato_cm" class="form-label">Zapato (cm):</label><input type="number" step="0.1" class="form-control form-control-sm" name="zapato_cm" value="{{ '%.1f'|format(current_data.get('zapato_cm')|float) if current_data.get('zapato_cm') is not none else '' }}" {% if not is_fully_editable and current_data.get('zapato_cm') is not none %}disabled{% endif %}></div>
+                                        <div class="col-sm-4"><label for="tipo_calzado" class="form-label">Calzado:</label><input type="text" class="form-control form-control-sm" name="tipo_calzado" value="{{ current_data.get('tipo_calzado') or '' }}" {% if not is_fully_editable and current_data.get('tipo_calzado') is not none %}disabled{% endif %}></div>
+                                    </div>
+                                    <div class="mt-3">
+                                        <label for="notas_plantillas" class="form-label">Notas Adicionales (Plantillas):</label>
+                                        <textarea class="form-control form-control-sm" name="notas_plantillas" id="notas_plantillas" rows="3" {% if not is_fully_editable and current_data.get('notas_plantillas') is not none %}disabled{% endif %}>{{ current_data.get('notas_plantillas') or '' }}</textarea>
+                                    </div>
+                                </div>
+                                <div class="form-section">
+                                    <h5>Examen Fuerza / Oximetría</h5>
+                                    <div class="row">
+                                         <div class="col-sm-6"><label for="fuerza_izq" class="form-label">Fuerza Izq (kg):</label><input type="number" step="0.1" class="form-control form-control-sm" name="fuerza_izq" value="{{ '%.1f'|format(current_data.get('fuerza_izq')|float) if current_data.get('fuerza_izq') is not none else '' }}" {% if not is_fully_editable and current_data.get('fuerza_izq') is not none %}disabled{% endif %}></div>
+                                         <div class="col-sm-6"><label for="fuerza_der" class="form-label">Fuerza Der (kg):</label><input type="number" step="0.1" class="form-control form-control-sm" name="fuerza_der" value="{{ '%.1f'|format(current_data.get('fuerza_der')|float) if current_data.get('fuerza_der') is not none else '' }}" {% if not is_fully_editable and current_data.get('fuerza_der') is not none %}disabled{% endif %}></div>
+                                         <div class="col-sm-6"><label for="oxigeno" class="form-label">Oxígeno (%):</label><input type="number" class="form-control form-control-sm" name="oxigeno" min="0" max="100" value="{{ current_data.get('oxigeno') or '' }}" {% if not is_fully_editable and current_data.get('oxigeno') is not none %}disabled{% endif %}></div>
+                                     </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-section mt-3">
+                            <h5>Radiografías (Rx)</h5>
+                            <div class="mb-3">
+                                <label for="fotos_rx" class="form-label">Añadir Nuevas Radiografías:</label>
+                                <input type="file" class="form-control form-control-sm" id="fotos_rx" name="fotos_rx" accept="image/*" multiple {% if not can_add_rx %}disabled title="Guarde el registro de hoy primero para añadir Rx"{% endif %}>
+                                <small class="form-text text-muted">Puedes seleccionar varios archivos. Las Rx se añaden al registro de postura existente.</small>
+                            </div>
+                            <div class="mt-3">
+                                <strong>Radiografías Guardadas ({{ loaded_date }}):</strong>
+                                {% if current_rx_list %}
+                                    <ul class="list-group list-group-flush mt-2">
+                                        {% for rx in current_rx_list %}
+                                            <li class="list-group-item d-flex justify-content-between align-items-center p-1">
+                                                <div title="Ver: {{ rx.ruta_archivo.split('/')[-1] }} (clic para zoom)" style="cursor: pointer;">
+                                                    <img src="{{ url_for('static', filename=rx.ruta_archivo) }}" alt="Rx {{ loop.index }}" class="image-preview zoomable-image">
+                                                    {{ rx.ruta_archivo.split('/')[-1]|truncate(30) }}
+                                                    <i class="fas fa-search-plus fa-xs text-muted ms-1"></i>
+                                                </div>
+                                            </li>
+                                        {% endfor %}
+                                    </ul>
+                                {% else %}
+                                    <p class="text-muted small mt-2">No hay radiografías guardadas para esta fecha.</p>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="d-flex justify-content-end mt-4 border-top pt-3">
+                             <a href="{{ url_for('patient.patient_detail', patient_id=patient.id_px) }}" class="btn btn-secondary me-2">Cancelar</a>
+                             <button type="submit" class="btn btn-primary" {% if not is_fully_editable and not can_add_rx %}disabled title="Solo se pueden editar registros de hoy"{% endif %}>
+                                <i class="fas fa-save me-1"></i> Guardar Cambios
+                             </button>
+                        </div>
+                        
+                        </div> </form> </div> </div> </div> </div> {% endblock %}
+
+
+{% block scripts %}
+{{ super() }}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // La función initializeDateDropdown() se eliminó 
+        // porque el nuevo menú de botón no la necesita.
+        
+        // --- Funcionalidad de Zoom ---
+        enableImageZoom();
+
+        function enableImageZoom() {
+            // Seleccionamos TODAS las imágenes (incluyendo las de Rx)
+            const images = document.querySelectorAll('.zoomable-image'); 
+            images.forEach(img => {
+                // Limpiamos listeners viejos para evitar duplicados
+                img.removeEventListener('click', handleImageClick); 
+                img.addEventListener('click', handleImageClick);
+            });
+        }
+
+        function handleImageClick(event) {
+            const clickedImage = event.target;
+            const overlay = document.createElement('div');
+            overlay.className = 'lightbox-overlay';
+            const largeImage = document.createElement('img');
+            largeImage.className = 'lightbox-image';
+            largeImage.src = clickedImage.src; 
+            overlay.appendChild(largeImage);
+            document.body.appendChild(overlay);
+            overlay.addEventListener('click', () => {
+                document.body.removeChild(overlay);
+            }, { once: true }); 
+        }
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,290 @@
+/* static/css/style.css */
+
+/* Estilos para los enlaces de la barra de navegación principal */
+.navbar-nav .nav-link {
+    color: rgba(255, 255, 255, 0.85); /* Color de texto un poco menos brillante que blanco puro */
+    padding: 0.5rem 1rem; /* Espaciado interno para que parezcan más botones */
+    margin: 0 0.25rem;   /* Espaciado pequeño entre enlaces */
+    border-radius: 0.375rem; /* Bordes redondeados */
+    transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out; /* Transición suave */
+}
+
+/* Efecto al pasar el mouse (hover) */
+.navbar-nav .nav-link:hover {
+    color: #ffffff; /* Texto blanco brillante al pasar el mouse */
+    background-color: #0d6efd; 
+    /* O podrías usar un borde: */
+    /* border: 1px solid rgba(255, 255, 255, 0.2); */
+}
+
+
+/* Asegurarse de que el texto del usuario en la navbar tenga buen contraste */
+.navbar-text {
+     color: rgba(255, 255, 255, 0.8) !important; /* Ajusta si es necesario */
+}
+
+.dashboard-button .icon {
+    margin-bottom: 0.5rem;
+    color: #0d6efd;
+}
+
+.dashboard-button {
+    /* Estilo para los botones/tarjetas de acción */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    text-decoration: none;
+    color: inherit; /* Heredar color de texto */
+    min-height: 150px; /* Altura mínima para que se vean bien */
+    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+.dashboard-button:hover {
+    transform: translateY(-5px); /* Efecto levantar al pasar el mouse */
+    box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+}
+
+.notes-area textarea {
+     min-height: 150px; /* Altura mínima para el área de notas */
+}
+.admin-section { /* Estilo opcional para la sección de admin */
+     background-color: #e9ecef; /* Un fondo ligeramente diferente */
+     border-radius: 0.375rem; /* Bordes redondeados */
+     padding: 1rem;
+}
+
+  /* Estilos opcionales para la búsqueda y resultados */
+  #search-results {
+    margin-top: 20px;
+    max-height: 400px; /* Limitar altura y permitir scroll */
+    overflow-y: auto; /* Añadir scroll si el contenido es muy largo */
+    border: 1px solid #eee;
+    padding: 10px;
+    min-height: 50px; /* Altura mínima para que se vea el borde */
+    background-color: #fdfdfd;
+}
+.patient-result-item {
+    padding: 8px 5px;
+    border-bottom: 1px dotted #ccc;
+    display: flex;
+    justify-content: space-between; /* Pone el botón al final */
+    align-items: center;
+}
+.patient-result-item:last-child {
+    border-bottom: none;
+}
+
+.patient-result-item.highlighted {
+    background-color: #cfe2ff; /* Un azul claro de Bootstrap para indicar selección/foco */
+    /* O puedes usar otro color: #e0f7fa; (cyan claro), #fff3cd; (amarillo claro) */
+  }
+
+/* Estilo para botones de acción deshabilitados */
+.dashboard-button.disabled-action {
+    opacity: 0.5; /* Hacerlo semitransparente */
+    cursor: not-allowed; /* Cambiar cursor */
+    pointer-events: none; /* Evitar clics (no siempre funciona en <a>) */
+    box-shadow: none; /* Quitar sombra */
+    transform: none; /* Quitar efecto hover de levantar */
+  }
+  /* Asegurarse que el hover no haga nada cuando está deshabilitado */
+  .dashboard-button.disabled-action:hover {
+       background-color: initial; /* Evita cambio de fondo de .card */
+       transform: none;
+       box-shadow: none;
+  }
+  
+  
+  /* Colores para iconos habilitados/deshabilitados */
+  .icon-disabled i {
+    color: #6c757d !important; /* Color gris de Bootstrap (secondary) */
+  }
+  
+  .icon-enabled i {
+    color: #0d6efd !important; /* Color azul de Bootstrap (primary) o el que prefieras */
+    /* O el verde original si lo prefieres habilitado: */
+    /* color: #2a9d8f !important; */
+  }
+  
+  /* Asegurarse que el texto dentro de botones deshabilitados también se apague */
+  .dashboard-button.disabled-action .card-title {
+      color: #6c757d; /* Color gris */
+  }
+
+  /* (Estilos anteriores) */
+  .form-section { margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid #eee; }
+  input:disabled, textarea:disabled, select:disabled, .form-check-input:disabled+label { background-color: #e9ecef !important; opacity: 0.7; cursor: not-allowed !important; }
+  .form-check-input:disabled { opacity: 0.65; }
+  #fecha-select-label { font-weight: bold; }
+  .rating-label { font-size: 0.9em; color: #6c757d; margin-bottom: 0.2rem; }
+  .condition-severity-row { margin-bottom: 1rem; }
+  .condition-input { flex-grow: 1; margin-right: 1rem; }
+  .severity-input { max-width: 100px; }
+  h5 { margin-top: 1.5rem; margin-bottom: 1rem; color: #2a9d8f; border-bottom: 1px solid #dee2e6; padding-bottom: 0.5rem;}
+  .form-label { margin-bottom: 0.2rem; font-weight: 500; }
+  .checkbox-group label { margin-bottom: 0.5rem; display: block; /* Asegura que la label esté arriba */}
+  .checkbox-group .form-check { margin-bottom: 0.5rem; /* Espacio entre checkboxes */ }
+
+  /* --- Estilos para el Diagrama --- */
+  .diagram-container {
+      position: relative; /* Necesario para posicionar los puntos */
+      max-width: 450px; /* Ajusta según el ancho de tu imagen */
+      margin: auto;
+      user-select: none; /* Evitar seleccionar imagen */
+      -webkit-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+  }
+  .diagram-container img {
+      display: block;
+      max-width: 100%;
+      height: auto;
+  }
+  .diagram-point {
+      position: absolute;
+      width: 15px; /* Tamaño del punto clickeable */
+      height: 15px;
+      background-color: rgba(0, 0, 255, 0.2); /* Azul semitransparente */
+      border: 1px solid rgba(0, 0, 255, 0.5);
+      border-radius: 50%;
+      cursor: pointer;
+      transform: translate(-50%, -50%); /* Centrar el punto en las coords */
+      transition: background-color 0.2s, border-color 0.2s;
+  }
+  .diagram-point:hover {
+      background-color: rgba(0, 0, 255, 0.4);
+      border-color: rgba(0, 0, 255, 0.8);
+  }
+  .diagram-point.selected {
+      background-color: rgba(255, 0, 0, 0.7); /* Rojo sólido al seleccionar */
+      border-color: rgba(200, 0, 0, 0.9);
+  }
+  .diagram-container.disabled .diagram-point {
+      cursor: not-allowed;
+      pointer-events: none; /* Deshabilitar clicks */
+      opacity: 0.5;
+  }
+
+      /* Estilos opcionales (mejor en style.css) */
+      .form-section { margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid #eee; }
+      .checkbox-list { border: 1px solid #eee; padding: 10px; background-color: #fdfdfd;
+         /* Descomenta si prefieres scroll para la lista larga */
+         /* max-height: 600px; */
+         /* overflow-y: auto; */
+      }
+      .form-check-inline { margin-right: 1rem; }
+      .spine-image-container img { max-width: 100%; height: auto; max-height: 600px; display: block; margin: auto; }
+      input:disabled, textarea:disabled, select:disabled, .form-check-input:disabled+label { background-color: #e9ecef !important; cursor: not-allowed !important; } /* !important para asegurar override */
+      .form-check-input:disabled { opacity: 0.65; }
+      #fecha-select-label { font-weight: bold; }
+      h5 { margin-top: 1rem; }
+
+      /* Estilos (Mejor en style.css) */
+    .hidden { display: none; }
+    #active-patient-display { padding: 10px; border-bottom: 1px solid #eee; margin-bottom: 1.5rem; min-height: 60px; text-align: center; }
+    #active-patient-display h3 { display: inline-block; margin-bottom: 0; margin-right: 15px; font-size: 1.25rem; }
+    #search-results-container { margin-top: 1.5rem; }
+    #search-results { margin-top: 0.5rem; max-height: 400px; overflow-y: auto; border: 1px solid #eee; padding: 10px; min-height: 100px; background-color: #fdfdfd; }
+    .patient-result-item { padding: 8px 5px; border-bottom: 1px dotted #ccc; display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
+    .patient-result-item:last-child { border-bottom: none; }
+    .patient-result-item.highlighted { background-color: #cfe2ff; }
+    .list-group-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-right: 10px; flex-grow: 1; }
+    .dashboard-button { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; text-decoration: none; color: inherit; min-height: 150px; transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out; }
+    .dashboard-button:hover { transform: translateY(-5px); box-shadow: 0 4px 15px rgba(0,0,0,0.15); }
+    .dashboard-button .icon { margin-bottom: 0.8rem; }
+    .icon-disabled i { color: #6c757d !important; }
+    .icon-enabled i { color: #0d6efd !important; }
+
+    .dashboard-button {
+        display: flex; flex-direction: column; align-items: center;
+        justify-content: center; text-align: center; text-decoration: none;
+        color: inherit; min-height: 150px; /* O la altura deseada */
+        transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+    }
+    .dashboard-button:hover {
+        transform: translateY(-5px); box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+    }
+    .dashboard-button .icon { margin-bottom: 0.8rem; }
+    /* Clases de color para iconos (deben estar en style.css o aquí) */
+    .icon-disabled i { color: #6c757d !important; } /* Gris */
+    .icon-enabled i { color: #0d6efd !important; } /* Azul primario Bootstrap */
+    /* Clase para estilo visual disabled (debe estar en style.css o aquí) */
+    .dashboard-button.disabled-action { opacity: 0.6; cursor: not-allowed; pointer-events: none; box-shadow: none !important; transform: none !important; }
+    .dashboard-button.disabled-action:hover { background-color: initial; }
+    .dashboard-button.disabled-action .card-title { color: #6c757d; }
+
+    /* Estilo para la información del paciente */
+    .patient-info p { margin-bottom: 0.5rem; } /* Menos espacio entre líneas */
+
+
+        /* Estilos */
+        .form-section { margin-bottom: 1.5rem; padding: 15px; border: 1px solid #eee; border-radius: 5px; background-color: #f8f9fa;}
+        input:disabled, textarea:disabled, select:disabled, .form-check-input:disabled+label { background-color: #e9ecef !important; opacity: 0.7; cursor: not-allowed !important; }
+        .form-check-input:disabled { opacity: 0.65; }
+        #fecha-select-label { font-weight: bold; }
+        h5 { margin-top: 1rem; margin-bottom: 1rem; color: #2a9d8f; border-bottom: 1px solid #dee2e6; padding-bottom: 0.5rem;}
+        .form-label { margin-bottom: 0.2rem; font-weight: 500; }
+        /* Hacer clickeable las etiquetas de los inputs numéricos */
+        label[for="visitas_qp"], label[for="visitas_tf"], label[for="promocion_pct"] { cursor: pointer; }
+        .adicionales-list { padding: 10px; border: 1px solid #eee; background-color: #fff; }
+        .form-check { padding-left: 1.8em; }
+        .form-check .form-check-input { float: left; margin-left: -1.8em; }
+        .cost-display { font-weight: bold; background-color: #e9ecef; padding: 0.375rem 0.75rem; border-radius: 0.375rem; display: inline-block; min-width: 80px; text-align: right;}
+
+        
+            /* Estilos (puedes moverlos a style.css) */
+    .form-section { margin-bottom: 1.5rem; padding: 15px; border: 1px solid #eee; border-radius: 5px; background-color: #f8f9fa;}
+    .form-section h5 { color: #2a9d8f; margin-bottom: 1rem; border-bottom: 1px solid #dee2e6; padding-bottom: 0.5rem; }
+    input:disabled, textarea:disabled, select:disabled, input[type=file]:disabled {
+        background-color: #e9ecef !important;
+        opacity: 0.7;
+        cursor: not-allowed !important;
+    }
+    /* Estilo específico para la etiqueta si el input file está deshabilitado (más complejo, opcional) */
+    /* input[type=file]:disabled + label { cursor: not-allowed !important; opacity: 0.7; } */
+
+    #fecha_select_pruebas_label { font-weight: bold; }
+    .image-preview {
+        max-height: 150px; max-width: 100%; margin-top: 10px; display: block;
+        border: 1px solid #ccc; object-fit: contain; background-color: #fff;
+    }
+    .image-preview-container small { display: block; margin-top: 5px; font-size: 0.8em; }
+    .image-preview-container .form-control-sm { font-size: 0.8rem; }
+    .form-label { margin-bottom: 0.2rem; font-weight: 500; }
+    .rx-list-item img { height: 40px; width: auto; max-width: 60px; object-fit: cover; margin-right: 10px; border: 1px solid #eee;}
+    .rx-list-item a { text-decoration: none; color: #0d6efd; }
+    .rx-list-item a:hover { text-decoration: underline; }
+
+
+        /* Estilos (puedes moverlos a style.css) */
+        .form-section { margin-bottom: 1.5rem; padding: 15px; border: 1px solid #eee; border-radius: 5px; background-color: #f8f9fa;}
+        input:disabled, textarea:disabled, select:disabled, input[type=file]:disabled, .form-check-input:disabled+label { background-color: #e9ecef !important; opacity: 0.7; cursor: not-allowed !important; }
+        .form-check-input:disabled { opacity: 0.65; }
+        #fecha-select-label { font-weight: bold; }
+        .severity-input { max-width: 100px; }
+        h5 { margin-top: 1rem; margin-bottom: 1rem; color: #2a9d8f; border-bottom: 1px solid #dee2e6; padding-bottom: 0.5rem;}
+        .form-label { margin-bottom: 0.2rem; font-weight: 500; }
+        .rating-label { font-size: 0.9em; color: #6c757d; margin-bottom: 0.2rem; }
+        /* Estilos Diagrama */
+        .diagram-container { position: relative; max-width: 450px; margin: auto; user-select: none; -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none; }
+        .diagram-container img { display: block; max-width: 100%; height: auto; }
+        .diagram-point { position: absolute; width: 15px; height: 15px; background-color: rgba(0, 0, 255, 0.2); border: 1px solid rgba(0, 0, 255, 0.5); border-radius: 50%; cursor: pointer; transform: translate(-50%, -50%); transition: background-color 0.2s, border-color 0.2s; }
+        .diagram-point:hover { background-color: rgba(0, 0, 255, 0.4); border-color: rgba(0, 0, 255, 0.8); }
+        .diagram-point.selected { background-color: rgba(255, 0, 0, 0.7); border-color: rgba(200, 0, 0, 0.9); }
+        .diagram-container.disabled .diagram-point { cursor: not-allowed; pointer-events: none; opacity: 0.5; }
+        /* Estilos Previsualización Imagen */
+        .image-preview { max-height: 120px; max-width: 100%; margin-top: 10px; display: block; border: 1px solid #ccc; object-fit: contain; background-color: #fff; }
+        .image-preview-container small { display: block; margin-top: 5px; font-size: 0.8em; }
+        .image-preview-container .form-control-sm { font-size: 0.8rem; }
+
+            /* ... (Estilos anteriores, puedes mantenerlos o ajustarlos) ... */
+    .form-section { margin-bottom: 1.5rem; padding: 15px; border: 1px solid #eee; border-radius: 5px; background-color: #f8f9fa;}
+    input:disabled, textarea:disabled, select:disabled, .form-check-input:disabled+label { background-color: #e9ecef !important; opacity: 0.7; cursor: not-allowed !important; }
+    .form-check-input:disabled { opacity: 0.65; }
+    #fecha-select-label { font-weight: bold; }
+    h5 { margin-top: 1rem; margin-bottom: 1rem; color: #2a9d8f; border-bottom: 1px solid #dee2e6; padding-bottom: 0.5rem;}
+    .form-label { margin-bottom: 0.2rem; font-weight: 500; font-size: 0.85em; }
+    .segment-input input { font-size: 0.9em; padding: 0.25rem 0.5rem; margin-bottom: 0.6rem; } /* Input más pequeño y espacio */
+    .therapy-list { max-height: 350px; overflow-y: auto; padding: 10px; border: 1px solid #eee; background-color: #fff; }
+    .spine-img-container img { max-height: 350px; width: auto; max-width: 100%; display: block; margin: 1.5rem auto 0 auto; } /* Ajuste margen imagen */

@@ -1,0 +1,68 @@
+{% extends 'base.html' %} 
+{% block title %}Registro de Quiropráctico{% endblock %} 
+
+{% block content %} 
+<div class="row justify-content-center">
+    <div class="col-md-8 col-lg-6"> 
+        <div class="text-center mb-4">
+            <h2 class="mt-3">Registro de Nuevo Quiropráctico</h2>
+            <p class="text-muted">Complete los datos para el nuevo doctor.</p>
+        </div>
+
+        <form method="post">
+            
+            {{ form.hidden_tag() }}
+
+            <div class="mb-3">
+                {{ form.nombre.label(class="form-label") }}
+                {{ form.nombre(class="form-control") }}
+                {% if form.nombre.errors %}
+                    <div class="invalid-feedback d-block">
+                        {% for error in form.nombre.errors %}<span>{{ error }}</span>{% endfor %}
+                    </div>
+                {% endif %}
+            </div>
+
+            <div class="mb-3">
+                {{ form.usuario.label(class="form-label") }}
+                {{ form.usuario(class="form-control") }}
+                {% if form.usuario.errors %}
+                    <div class="invalid-feedback d-block">
+                        {% for error in form.usuario.errors %}<span>{{ error }}</span>{% endfor %}
+                    </div>
+                {% endif %}
+            </div>
+
+            <div class="mb-3">
+                {{ form.contraseña.label(class="form-label") }}
+                {{ form.contraseña(class="form-control") }}
+                {% if form.contraseña.errors %}
+                    <div class="invalid-feedback d-block">
+                        {% for error in form.contraseña.errors %}<span>{{ error }}</span>{% endfor %}
+                    </div>
+                {% endif %}
+            </div>
+
+            <div class="mb-3">
+                {{ form.confirm_password.label(class="form-label") }}
+                {{ form.confirm_password(class="form-control") }}
+                {% if form.confirm_password.errors %}
+                    <div class="invalid-feedback d-block">
+                        {% for error in form.confirm_password.errors %}<span>{{ error }}</span>{% endfor %}
+                    </div>
+                {% endif %}
+            </div>
+
+            <div class="form-check mb-3">
+                {{ form.es_admin_nuevo_dr(class="form-check-input") }}
+                {{ form.es_admin_nuevo_dr.label(class="form-check-label") }}
+            </div>
+
+            <div class="d-grid gap-2 mt-4"> 
+                {{ form.submit(class="btn btn-primary btn-lg") }}
+                <a href="{{ url_for('admin.admin_dashboard') }}" class="btn btn-secondary">Cancelar</a> 
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

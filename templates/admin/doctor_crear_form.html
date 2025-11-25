@@ -1,0 +1,81 @@
+{% extends 'base.html' %}
+{% block title %}Registrar Nuevo Doctor{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8 col-lg-6">
+        <div class="text-center mb-4">
+            <h2 class="mt-3">Registro de Nuevo Quiropráctico</h2>
+            <p class="text-muted">Complete los datos para el nuevo doctor.</p>
+        </div>
+
+        <form method="post">
+            {{ form.hidden_tag() }}
+
+            <div class="mb-3">
+                {{ form.nombre.label(class="form-label") }}
+                {{ form.nombre(class="form-control") }}
+                {% for error in form.nombre.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+            </div>
+
+            <div class="mb-3">
+                {{ form.usuario.label(class="form-label") }}
+                {{ form.usuario(class="form-control") }}
+                {% for error in form.usuario.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+            </div>
+            
+            <div class="mb-3">
+                {{ form.contraseña.label(class="form-label") }}
+                {{ form.contraseña(class="form-control") }}
+                {% for error in form.contraseña.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+            </div>
+            
+            <div class="mb-3">
+                {{ form.confirm_password.label(class="form-label") }}
+                {{ form.confirm_password(class="form-control") }}
+                {% for error in form.confirm_password.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+            </div>
+
+            <div class="mb-3">
+                {{ form.centro.label(class="form-label") }}
+                {{ form.centro(class="form-select", id="centro_select") }}
+                {% for error in form.centro.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+            </div>
+
+            <div class="form-check mb-3">
+                {{ form.es_admin_nuevo_dr(class="form-check-input", id="es_admin_check") }}
+                {{ form.es_admin_nuevo_dr.label(class="form-check-label") }}
+            </div>
+
+            <div class="d-grid gap-2 mt-4">
+                {{ form.submit(class="btn btn-primary btn-lg") }}
+                <a href="{{ url_for('admin.admin_manage_doctores') }}" class="btn btn-secondary">Cancelar</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const adminCheck = document.getElementById('es_admin_check');
+        const centroSelect = document.getElementById('centro_select');
+        
+        function toggleCentro() {
+            if (centroSelect) {
+                centroSelect.disabled = adminCheck.checked;
+                if (adminCheck.checked) {
+                    centroSelect.value = ''; // Limpia la selección si es admin
+                }
+            }
+        }
+        
+        if (adminCheck && centroSelect) {
+            adminCheck.addEventListener('change', toggleCentro);
+            toggleCentro(); // Correr al cargar la página
+        }
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8 col-lg-6">
+        <div class="text-center mb-4">
+            <h2 class="mt-3">{{ title }}</h2>
+            {% if centro %}
+                <p class="text-muted">ID de Clínica: {{ centro.id_centro }}</p>
+            {% else %}
+                <p class="text-muted">Complete los datos de la nueva clínica.</p>
+            {% endif %}
+        </div>
+
+        <form method="post">
+            {{ form.hidden_tag() }}
+
+            <div class="mb-3">
+                {{ form.nombre.label(class="form-label") }}
+                {{ form.nombre(class="form-control") }}
+                {% for error in form.nombre.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+            </div>
+
+            <div class="mb-3">
+                {{ form.direccion.label(class="form-label") }}
+                {{ form.direccion(class="form-control") }}
+                {% for error in form.direccion.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+            </div>
+
+            <div class="mb-3">
+                {{ form.cel.label(class="form-label") }}
+                {{ form.cel(class="form-control") }}
+                {% for error in form.cel.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+            </div>
+
+            <div class="mb-3">
+                {{ form.tel.label(class="form-label") }}
+                {{ form.tel(class="form-control") }}
+                {% for error in form.tel.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+            </div>
+            <div class="d-grid gap-2 mt-4">
+                {{ form.submit(class="btn btn-primary btn-lg") }}
+                <a href="{{ url_for('admin.admin_manage_clinicas') }}" class="btn btn-secondary">Cancelar</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,504 @@
+{% extends 'base.html' %}
+
+{% block title %}Detalle Paciente - {{ patient.nombre }} {{ patient.apellidop }}{% endblock %}
+
+{% block head_extra %}
+{# Puedes añadir aquí estilos específicos para la página de detalle si los necesitas #}
+{# Por ejemplo, si quieres reusar los estilos de botones del dashboard #}
+
+{% endblock %}
+
+{% block content %}
+    {# Sección de Información del Paciente #}
+
+    <div class="row justify-content-between align-items-center mb-3">
+        {# Columna para el título/nombre del paciente #}
+        <div class="col">
+            <h2>{{ patient.nombre }} {{ patient.apellidop }} {{ patient.apellidom or '' }}</h2>
+        </div>
+        <div class="col-auto d-flex"> {# Contenedor Flex para los botones #}
+            {# ---> NUEVO BOTÓN EDITAR PACIENTE (SOLO ADMIN) <--- #}
+            {% if session.get('is_admin') %}
+            <a href="{{ url_for('patient.edit_patient_route', patient_id=patient.id_px) }}" class="btn btn-info btn-sm me-2">
+                <i class="fas fa-user-edit"></i> Editar Datos Paciente
+            </a>
+            {% endif %}
+            {# --- FIN NUEVO BOTÓN --- #}
+            <a href="{{ url_for('main') }}" class="btn btn-secondary btn-sm">Volver al Dashboard</a>
+        </div>
+    </div>
+
+    <div class="mb-4 patient-info">
+        <p class="lead">
+            <strong>ID Paciente:</strong> {{ patient.id_px }} <br>
+            {% if patient.nacimiento %}
+            <strong>Fecha Nacimiento:</strong> {{ patient.nacimiento }} <br>
+            {% endif %}
+            {% if patient.cel %}
+            <strong>Celular:</strong> {{ patient.cel }} <br>
+            {% endif %}
+            {% if patient.correo %}
+            <strong>Correo:</strong> {{ patient.correo }}
+            {% endif %}
+        </p>
+    </div>
+
+    <hr class="my-4">
+
+    <div class="col-lg-8">
+    {% if active_plan_info %}
+    <div class="card mb-4 shadow-sm">
+        
+        <div class="card-header">
+            <h5 class="mb-0">
+                <i class="fas fa-clipboard-list me-2"></i>
+                Resumen del Plan: {{ active_plan_info.pb_diagnostico or "Plan Activo" }}
+                <small class="fw-normal opacity-75"> (Iniciado: {{ active_plan_info.fecha_creacion_plan }})</small>
+            </h5>
+        </div>
+        
+        <div class="card-body">
+            <div class="row">
+                
+                <div class="col-md-5">
+                    <h6 class="text-dark">Estado de Sesiones</h6>
+                    <hr class="my-2">
+
+                    <h6>Ajustes (QP)</h6>
+                    <p class="fs-5 mb-1">
+                        <span class="fw-bold text-primary">{{ active_plan_info.qp_restantes }}</span> Restantes
+                    </p>
+                    <small class="text-muted d-block mb-3">
+                        ({{ active_plan_info.qp_consumidas }} de {{ active_plan_info.visitas_qp }} completadas)
+                    </small>
+                    
+                    <h6>Terapias (TF)</h6>
+                    <p class="fs-5 mb-1">
+                        <span class="fw-bold text-info">{{ active_plan_info.tf_restantes }}</span> Restantes
+                    </p>
+                    <small class="text-muted d-block">
+                        ({{ active_plan_info.tf_consumidas }} de {{ active_plan_info.visitas_tf }} completadas)
+                    </small>
+                </div>
+
+                <div class="col-md-7 border-start ps-md-4"> <h6 class="text-dark">Análisis de Adicionales</h6>
+                    <hr class="my-2">
+                    
+                    {% if adicionales_status %}
+                    <p class="card-text text-muted small mt-2 mb-2">
+                        Estado de los productos recomendados en este plan:
+                    </p>
+                    <ul class="list-group list-group-flush">
+                        {% for item in adicionales_status %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center px-0 py-2">
+                            <div>
+                                <strong>{{ item.nombre }}</strong>
+                                {% if item.ultima_compra %}
+                                <small class="d-block text-muted">
+                                    Últ. compra: {{ item.ultima_compra }}
+                                    {% if item.status == 'Renovación sugerida' and item.fecha_renovacion %}
+                                        | Renovación: {{ item.fecha_renovacion }}
+                                    {% endif %}
+                                </small>
+                                {% endif %}
+                            </div>
+                            
+                            {% if item.status == 'Falta adquirir' %}
+                                <span class="badge bg-danger rounded-pill text-nowrap">Falta Adquirir</span>
+                            {% elif item.status == 'Renovación sugerida' %}
+                                <span class="badge bg-warning text-dark rounded-pill text-nowrap">Sugerir Renovación</span>
+                            {% elif item.status == 'Adquirido' %}
+                                <span class="badge bg-success rounded-pill text-nowrap">Adquirido</span>
+                            {% else %}
+                                <span class="badge bg-secondary rounded-pill text-nowrap">{{ item.status }}</span>
+                            {% endif %}
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% else %}
+                    <p class="text-muted mt-3">Este plan no tiene productos adicionales recomendados.</p>
+                    {% endif %}
+                </div>
+                
+            </div> 
+        </div> 
+    </div> 
+    {% endif %} 
+    </div>
+
+    <hr class="my-4">
+
+    <h4>Acciones Clínicas</h4>
+
+    {# Fila para los botones de acción #}
+    <div class="row gy-4 mt-3 justify-content-center">
+
+        {# Botón Antecedentes (Condicional) #}
+        <div class="col-md-4 col-lg-3">
+            {% if has_antecedentes_today %}
+                {# Si YA existen antecedentes para HOY, muestra botón para editar/ver #}
+                <a href="{{ url_for('clinical.manage_antecedentes', patient_id=patient.id_px) }}" class="card shadow-sm dashboard-button text-decoration-none d-block" title="Ver o editar los antecedentes registrados hoy">
+                    <div class="card-body">
+                         {# Icono de Editar, color habilitado (asumimos que siempre se puede ver/editar el de hoy) #}
+                        <div class="icon"><i class="fas fa-edit fa-3x icon-enabled"></i></div>
+                        <h5 class="card-title mt-2">Antecedentes</h5>
+                    </div>
+                </a>
+            {% else %}
+                {# Si NO existen antecedentes para HOY, muestra botón para crear #}
+                <a href="{{ url_for('clinical.manage_antecedentes', patient_id=patient.id_px) }}" class="card shadow-sm dashboard-button text-decoration-none d-block" title="Crear el registro de antecedentes para hoy">
+                     <div class="card-body">
+                         {# Icono de Crear Documento, color habilitado #}
+                        <div class="icon"><i class="fas fa-file-medical fa-3x icon-enabled"></i></div>
+                        <h5 class="card-title mt-2">Antecedentes</h5>
+                    </div>
+                </a>
+            {% endif %}
+        </div>
+
+        {# Botón Anamnesis (Placeholder Deshabilitado) #}
+        <div class="col-md-4 col-lg-3">
+            {# Quitamos 'disabled-action', cambiamos 'icon-disabled' a 'icon-enabled', y ponemos el URL correcto #}
+            <a href="{{ url_for('clinical.manage_anamnesis', patient_id=patient.id_px) }}" class="card shadow-sm dashboard-button text-decoration-none d-block">
+                <div class="card-body">
+                    <div class="icon"><i class="fas fa-magnifying-glass-chart fa-3x icon-enabled"></i></div> {# <- Cambio aquí #}
+                    <h5 class="card-title mt-2">Anamnesis</h5>
+                </div>
+            </a>
+        </div>
+
+        {# Botón Generar Reporte #}
+        <div class="col-md-4 col-lg-3">
+            <a href="{{ url_for('clinical.generate_patient_report', patient_id=patient.id_px) }}" class="card shadow-sm dashboard-button text-decoration-none d-block" target="_blank" title="Generar Historia Clínica / Reporte">
+                <div class="card-body">
+                    <div class="icon"><i class="fas fa-file-pdf fa-3x icon-enabled"></i></div>
+                   <h5 class="card-title mt-2">Generar Reporte</h5>
+               </div>
+           </a>
+       </div>
+
+
+       {# ---> NUEVO BOTÓN: PDF PARA PLANTILLAS <--- #}
+       <div class="col-md-4 col-lg-3">
+            <button type="button" id="btn_generar_pdf_plantillas"
+                    class="card shadow-sm dashboard-button text-decoration-none d-block"
+                    data-pdf-url="{{ url_for('clinical.generate_plantillas_pdf', patient_id=patient.id_px) }}"
+                    data-check-url="{{ url_for('clinical.check_plantillas_data_exists', patient_id=patient.id_px) }}"
+                    data-redirect-url="{{ url_for('patient.patient_detail', patient_id=patient.id_px) }}"
+                    title="Generar PDF para elaboración de plantillas ortopédicas">
+                <div class="card-body">
+                    <div class="icon"><i class="fas fa-shoe-prints fa-3x icon-enabled"></i></div>
+                    <h5 class="card-title mt-2">PDF Plantillas</h5>
+                </div>
+            </button>
+        </div>
+    {# ---> FIN NUEVO BOTÓN <--- #}
+
+
+        {# Botón Pruebas (Antes Examenes) #}
+        <div class="col-md-4 col-lg-3">
+            {# Habilitar quitando disabled-action, cambiando icono y URL #}
+            <a href="{{ url_for('clinical.manage_pruebas', patient_id=patient.id_px) }}" class="card shadow-sm dashboard-button text-decoration-none d-block">
+               <div class="card-body">
+                    {# Puedes usar otro icono si prefieres, ej: fa-vial-virus, fa-flask-vial #}
+                   <div class="icon"><i class="fas fa-flask-vial fa-3x icon-enabled"></i></div>
+                   <h5 class="card-title mt-2">Pruebas</h5> {# Cambiado el texto #}
+               </div>
+           </a>
+       </div>
+       
+        <div class="col-md-4 col-lg-3">
+            {# El enlace apunta a la ruta que CREAREMOS en el siguiente paso #}
+            <a href="{{ url_for('clinical.manage_revaloracion', patient_id=patient.id_px) }}" class="card shadow-sm dashboard-button text-decoration-none d-block" title="Registrar o ver revaloración del paciente">
+                <div class="card-body">
+                    {# Icono sugerido: gráfico de línea para evolución #}
+                    <div class="icon"><i class="fas fa-chart-line fa-3x icon-enabled"></i></div>
+                    <h5 class="card-title mt-2">Revaloración</h5>
+                </div>
+            </a>
+        </div>
+        
+         {# Botón Plan Cuidado  #}
+         <div class="col-md-4 col-lg-3">
+            {# --- CAMBIOS AQUÍ --- #}
+           <a href="{{ url_for('clinical.manage_plan_cuidado', patient_id=patient.id_px) }}" class="card shadow-sm dashboard-button text-decoration-none d-block" title="Definir o ver el Plan de Cuidado">
+                {# --- FIN CAMBIOS --- #}
+               <div class="card-body">
+                    {# --- CAMBIO ICONO AQUÍ --- #}
+                   <div class="icon"><i class="fas fa-clipboard-list fa-3x icon-enabled"></i></div>
+                    {# --- FIN CAMBIO ICONO --- #}
+                   <h5 class="card-title mt-2">Plan Cuidado</h5>
+               </div>
+           </a>
+       </div>
+         {# Botón Seguimiento (Placeholder Deshabilitado - Asumimos que también depende del paciente) #}
+         {# Si Seguimiento NO depende del paciente activo, quítale disabled-action / icon-disabled #}
+        <div class="col-md-4 col-lg-3">
+            {# El enlace apunta a la ruta que CREAREMOS después #}
+            <a href="{{ url_for('clinical.manage_seguimiento', patient_id=patient.id_px) }}" class="card shadow-sm dashboard-button text-decoration-none d-block" title="Registrar o ver visita de seguimiento">
+                <div class="card-body">
+                     {# Icono sugerido: notas médicas o calendario #}
+                    <div class="icon"><i class="fas fa-notes-medical fa-3x icon-enabled"></i></div>
+                    {# O podrías usar: <i class="fas fa-calendar-check fa-3x icon-enabled"></i> #}
+                    {# O: <i class="fas fa-person-walking-arrow-right fa-3x icon-enabled"></i> #}
+                    <h5 class="card-title mt-2">Seguimiento</h5>
+                </div>
+            </a>
+        </div>
+        {# ---> NUEVO BOTÓN: RECIBOS <--- #}
+        <div class="col-md-4 col-lg-3">
+            <a href="{{ url_for('clinical.manage_recibos', patient_id=patient.id_px) }}" class="card shadow-sm dashboard-button text-decoration-none d-block" title="Ver historial o crear nuevo recibo de pago">
+                <div class="card-body">
+                    <div class="icon"><i class="fas fa-file-invoice-dollar fa-3x icon-enabled"></i></div>
+                    <h5 class="card-title mt-2">Recibos / Pagos</h5>
+                </div>
+            </a>
+        </div>
+        {# ---> BOTON INFORME IA <--- #}
+        <div class="col-md-4 col-lg-3">
+            <a href="{{ url_for('clinical.generar_reporte_integral_pdf', patient_id=patient.id_px) }}" target="_blank" class="card shadow-sm dashboard-button text-decoration-none d-block" title="Geerar informe integral con IA">
+                <div class="card-body">
+                    <div class="icon"><i class="fas fa-file-pdf fa-3x icon-enabled"></i></div>
+                    <h5 class="card-title mt-2">Informe (IA)</h5>
+                </div>
+                
+            </a>
+        </div>
+
+        <div class="col-md-4 col-lg-3">
+            {% if num_postura_records >= 2 %}
+                <a href="{{ url_for('clinical.comparador_postura', patient_id=patient.id_px) }}" class="card shadow-sm dashboard-button text-decoration-none d-block" title="Comparar posturas del paciente">
+                    <div class="card-body">
+                        <div class="icon"><i class="fas fa-exchange-alt fa-3x icon-enabled"></i></div>
+                        <h5 class="card-title mt-2">Comparar Posturas</h5>
+                    </div>
+                </a>
+            {% endif %}
+        </div>
+        <div class="col-md-4 col-lg-3">
+            {% if num_postura_records >= 1 %}
+                <a href="{{ url_for('clinical.reporte_visual_fechado', patient_id=patient.id_px) }}" class="card shadow-sm dashboard-button text-decoration-none d-block" title="Reporte de resultados">
+                    <div class="card-body">
+                        <div class="icon"><i class="fas fa-eye me-2 fa-3x icon-enabled"></i></div>
+                        <h5 class="card-title mt-2">Reporte de resultados</h5>
+                    </div>
+                </a>
+            {% endif %}
+        </div>
+    </div> 
+    {# --- INICIO MODAL PARA SELECCIÓN DE FECHA DE PRUEBAS --- #}
+<div class="modal fade" id="selectFechaPruebasModal" tabindex="-1" aria-labelledby="selectFechaPruebasModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-sm">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="selectFechaPruebasModalLabel">Seleccionar Fecha de Pruebas</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <p>Se encontraron múltiples registros de pruebas. Por favor, selecciona la fecha para generar el PDF de plantillas:</p>
+          <select class="form-select" id="fechaPruebasSelector">
+            {# Las opciones se llenarán con JavaScript #}
+          </select>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="button" class="btn btn-primary" id="confirmFechaPruebasPdf">Generar PDF</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  {# --- FIN MODAL --- #}
+  {% if unseen_notes %}
+<div class="modal fade" id="unseenNotesModal" tabindex="-1" aria-labelledby="unseenNotesModalLabel" aria-hidden="true" data-bs-backdrop="static">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-warning border-3">
+      <div class="modal-header bg-warning text-dark">
+        <h5 class="modal-title" id="unseenNotesModalLabel"><i class="fas fa-exclamation-triangle me-2"></i> Notas Pendientes</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p>Este paciente tiene las siguientes notas pendientes:</p>
+        <ul class="list-group list-group-flush">
+          {% for note in unseen_notes %}
+            <li class="list-group-item" data-note-id="{{ note.id_nota }}">
+              <strong>{{ note.fecha }}:</strong>
+              <p class="mb-0" style="white-space: pre-wrap;">{{ note.notas }}</p>
+            </li>
+          {% endfor %}
+        </ul>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+          Posponer (Volver a mostrar)
+        </button>
+        <button type="button" class="btn btn-success" id="mark-notes-seen-btn">
+          <i class="fas fa-check me-1"></i> Marcar como Visto
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %} {# Fin del bloque content #}
+
+
+{% block scripts %}
+{{ super() }} {# Incluye scripts de base.html (bootstrap.js, app.js) #}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // 1. Busca el modal
+        const notesModalElement = document.getElementById('unseenNotesModal');
+        
+        if (notesModalElement) {
+            // 2. Si el modal existe (porque hay notas), lo preparamos y mostramos
+            const notesModal = new bootstrap.Modal(notesModalElement);
+            const markAsSeenBtn = document.getElementById('mark-notes-seen-btn');
+            
+            // 3. Mostramos el modal automáticamente al cargar la página
+            notesModal.show();
+            
+            // 4. Manejador del botón "Visto"
+            markAsSeenBtn.addEventListener('click', async function() {
+                // Recolecta TODOS los IDs de las notas mostradas
+                const noteItems = notesModalElement.querySelectorAll('li[data-note-id]');
+                const noteIds = Array.from(noteItems).map(item => item.dataset.noteId);
+                
+                if (noteIds.length > 0) {
+                    markAsSeenBtn.disabled = true; // Deshabilitar botón
+                    markAsSeenBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Guardando...';
+
+                    try {
+                        // Llama a la API que creamos en clinical.py
+                        const response = await fetch("{{ url_for('clinical.api_mark_notes_seen', patient_id=patient.id_px) }}", {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                // Asegúrate de que 'csrf_token()' esté disponible si usas CSRF
+                                'X-CSRFToken': '{{ csrf_token() if csrf_token else "" }}' 
+                            },
+                            body: JSON.stringify({ note_ids: noteIds })
+                        });
+                        
+                        const result = await response.json();
+                        
+                        if (result.success) {
+                            notesModal.hide();
+                        } else {
+                            alert('Error al marcar las notas: ' + result.message);
+                            markAsSeenBtn.disabled = false;
+                            markAsSeenBtn.innerHTML = '<i class="fas fa-check me-1"></i> Marcar como Visto';
+                        }
+                    } catch (error) {
+                        console.error("Error en fetch:", error);
+                        alert('Error de red al marcar las notas.');
+                        markAsSeenBtn.disabled = false;
+                        markAsSeenBtn.innerHTML = '<i class="fas fa-check me-1"></i> Marcar como Visto';
+                    }
+                } else {
+                    notesModal.hide(); // No hay IDs que marcar, solo cerrar
+                }
+            });
+        }
+        const btnPdfPlantillas = document.getElementById('btn_generar_pdf_plantillas');
+        const selectFechaModalElement = document.getElementById('selectFechaPruebasModal'); // Obtener el elemento del DOM
+        let selectFechaModalInstance; // Instancia del modal de Bootstrap
+    
+        // Solo inicializar el modal de Bootstrap si el elemento existe
+        if (selectFechaModalElement) {
+            selectFechaModalInstance = new bootstrap.Modal(selectFechaModalElement);
+        } else {
+            console.error("Elemento del modal 'selectFechaPruebasModal' no encontrado.");
+        }
+        
+        const fechaPruebasSelector = document.getElementById('fechaPruebasSelector');
+        const confirmFechaPruebasPdfBtn = document.getElementById('confirmFechaPruebasPdf');
+    
+        let currentPdfUrlBase = '';
+        let currentPatientId = {{ patient.id_px }};
+    
+        if (btnPdfPlantillas) {
+            btnPdfPlantillas.addEventListener('click', function() {
+                // ... (código fetch sin cambios) ...
+                const checkUrl = this.dataset.checkUrl;
+                currentPdfUrlBase = this.dataset.pdfUrl;
+                const redirectUrlOnError = this.dataset.redirectUrl;
+    
+                this.disabled = true;
+                this.querySelector('.card-title').textContent = 'Verificando...';
+    
+                fetch(checkUrl)
+                    .then(response => {
+                        if (!response.ok) {
+                            return response.json().then(errData => {
+                                throw new Error(errData.message || `Error HTTP: ${response.status}`);
+                            }).catch(() => {
+                                throw new Error(`Error HTTP: ${response.status} - ${response.statusText}`);
+                            });
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        btnPdfPlantillas.disabled = false;
+                        btnPdfPlantillas.querySelector('.card-title').textContent = 'PDF Plantillas';
+    
+                        if (data.exists) {
+                            if (data.available_dates && data.available_dates.length > 1) {
+                                if (fechaPruebasSelector) { // Verificar que el selector exista
+                                    fechaPruebasSelector.innerHTML = '';
+                                    // ---> CORRECCIÓN AQUÍ: añadir 'index' como segundo parámetro <---
+                                    data.available_dates.forEach(function(fecha, index) {
+                                        const option = document.createElement('option');
+                                        option.value = fecha;
+                                        option.textContent = fecha;
+                                        if (index === 0) { // La primera fecha en la lista es la más reciente
+                                            option.selected = true;
+                                        }
+                                        fechaPruebasSelector.appendChild(option);
+                                    });
+                                } else {
+                                    console.error("Elemento select 'fechaPruebasSelector' no encontrado para poblar.")
+                                }
+                                if (selectFechaModalInstance) { // Verificar que la instancia del modal exista
+                                    selectFechaModalInstance.show();
+                                }
+                            } else if (data.available_dates && data.available_dates.length === 1) {
+                                const fechaSeleccionada = data.available_dates[0];
+                                const finalPdfUrl = `${currentPdfUrlBase}?fecha_pruebas=${encodeURIComponent(fechaSeleccionada)}`;
+                                window.open(finalPdfUrl, '_blank');
+                            } else {
+                                window.open(currentPdfUrlBase, '_blank');
+                            }
+                        } else {
+                            window.location.href = currentPdfUrlBase;
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error al verificar datos para PDF plantillas:', error);
+                        alert('Ocurrió un error: ' + error.message);
+                        btnPdfPlantillas.disabled = false;
+                        btnPdfPlantillas.querySelector('.card-title').textContent = 'PDF Plantillas';
+                    });
+            });
+        }
+    
+        if (confirmFechaPruebasPdfBtn) {
+            confirmFechaPruebasPdfBtn.addEventListener('click', function() {
+                if (fechaPruebasSelector) { // Verificar que el selector exista
+                    const fechaSeleccionada = fechaPruebasSelector.value;
+                    if (fechaSeleccionada && currentPdfUrlBase) {
+                        const finalPdfUrl = `${currentPdfUrlBase}?fecha_pruebas=${encodeURIComponent(fechaSeleccionada)}`;
+                        window.open(finalPdfUrl, '_blank');
+                        if (selectFechaModalInstance) { // Verificar que la instancia del modal exista
+                            selectFechaModalInstance.hide();
+                        }
+                    } else {
+                        alert("Por favor, selecciona una fecha.");
+                    }
+                } else {
+                    console.error("Elemento select 'fechaPruebasSelector' no encontrado en confirmación.")
+                }
+            });
+        }
+    });
+    </script>
+    {% endblock %}

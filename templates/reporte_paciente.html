@@ -1,0 +1,468 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Reporte Paciente - {{ data.patient.nombre }} {{ data.patient.apellidop }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='bootstrap/css/bootstrap.min.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='fontawesome/css/all.min.css') }}">
+    <style>
+        body { background-color: #fff; /* Fondo blanco para impresión */ font-size: 10pt; /* Tamaño más típico para reportes */ }
+        .report-container { max-width: 800px; margin: 20px auto; }
+        .report-header { text-align: center; margin-bottom: 25px; border-bottom: 1px solid #dee2e6; padding-bottom: 10px; }
+        .report-header img { max-height: 50px; margin-bottom: 5px; }
+        .report-header h3, .report-header h4 { margin-bottom: 2px; }
+        .report-section { margin-bottom: 20px; padding: 15px; border: 1px solid #eee; border-radius: 5px; background-color: #fdfdfd; }
+        .report-section h4 { font-size: 1.1rem; color: #2a9d8f; margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 8px;}
+        .data-row { display: flex; margin-bottom: 4px; line-height: 1.4; }
+        .data-label { font-weight: bold; min-width: 180px; flex-shrink: 0; padding-right: 10px; }
+        .data-value { flex-grow: 1; }
+        .list-2col { list-style: none; padding-left: 0; column-count: 2; column-gap: 20px; }
+        .list-2col li { margin-bottom: 3px; break-inside: avoid-column; }
+        .list-2col i { margin-right: 6px; width: 1.2em; /* Alineación */ text-align: center; color: #6c757d; }
+        .list-2col li.checked i { color: #198754; } /* Verde para marcado */
+
+        /* Estilos para el Diagrama en el Reporte */
+        .report-diagram-container {
+            position: relative;
+            max-width: 300px; /* Más pequeño en reporte */
+            margin: 10px auto;
+            line-height: 0; /* Para evitar espacio extra bajo la imagen */
+        }
+        .report-diagram-container img { display: block; max-width: 100%; height: auto; }
+        .report-diagram-marker {
+            position: absolute;
+            width: 8px; /* Puntos más pequeños */
+            height: 8px;
+            background-color: red;
+            border: 1px solid darkred;
+            border-radius: 50%;
+            transform: translate(-50%, -50%); /* Centrar el punto */
+        }
+        /* Estilos para la lista de Rx */
+        .rx-list-item img {
+            height: 150px;       /* <-- Nuevo valor */
+            width: auto;         /* Mantenemos auto para proporción */
+            max-width: 180px;    /* <-- Nuevo valor (ajusta si es necesario) */
+            object-fit: contain; /* Usar 'contain' es mejor para Rx para no cortar partes */
+            margin-right: 10px; 
+            border: 1px solid #eee;
+            cursor: pointer;     /* Añadir cursor para indicar que es clickeable */
+        }        
+        .rx-list-item {
+            justify-content: center; /* Centra el contenido (la miniatura) */
+            padding: 5px !important; /* Un poco más de padding */
+            min-width: 200px; /* Ancho mínimo para que quepan bien */
+            flex-basis: 30%; /* Intentar que quepan unas 3 por fila */
+            flex-grow: 1;
+        }
+        #radiografias-images { /* Asegúrate que el div contenedor tenga este ID */
+            display: flex;       /* Usar flexbox */
+            flex-wrap: wrap;     /* Permitir que pasen a la siguiente línea */
+            gap: 15px;           /* Espacio entre miniaturas */
+            justify-content: center; /* Centrar las miniaturas */
+        }
+
+         /* Estilos para tabla comparativa */
+        .comparison-table th, .comparison-table td { vertical-align: middle; text-align: center; }
+        .comparison-table th:first-child { text-align: left; }
+        .score-improved { color: #198754; font-weight: bold; } /* Verde */
+        .score-worsened { color: #dc3545; font-weight: bold; } /* Rojo */
+        .score-same { color: #6c757d; } /* Gris */
+        /* Mini-diagrama en tabla */
+        .comparison-table .report-diagram-container { max-width: 150px; margin-bottom: 0; }
+        .comparison-table .report-diagram-marker { width: 6px; height: 6px; }
+        .comparison-table small { font-size: 0.8em; }
+
+
+        @media print {
+            body { margin: 1cm; font-size: 9pt; }
+            .report-container { max-width: 100%; margin: 0; border: none; box-shadow: none; }
+            .report-section { border: none; padding: 0; margin-bottom: 15px; page-break-inside: avoid; background-color: transparent; }
+            .report-header { margin-bottom: 20px; border-bottom: 1px solid #000; }
+            .report-section h4 { color: #000; border-bottom: 1px solid #ccc; }
+            .btn, .episode-selector-section { display: none !important; }
+            .list-2col { column-count: 2; }
+             .report-diagram-container { max-width: 250px; }
+             .rx-list-item img { max-height: 30px; width: auto; max-width: 50px; }
+             /* Estilos específicos de impresión para tabla */
+             .comparison-table { font-size: 0.85em; }
+             .comparison-table th, .comparison-table td { padding: 0.2rem 0.3rem; }
+             .comparison-table .report-diagram-container { max-width: 120px; }
+             .score-improved, .score-worsened, .score-same { font-weight: normal; } /* Quitar bold al imprimir */
+        }
+    </style>
+</head>
+<body>
+    <div class="report-container">
+        {# --- ENCABEZADO --- #}
+        <div class="report-header">
+            <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Logo Consultorio">
+            <h3>Chiropractic Care Center</h3>
+            <h4>Reporte de Paciente</h4>
+        </div>
+
+         {# --- Selector de EPISODIO --- #}
+         <div class="row mb-3 episode-selector-section d-print-none">
+            <div class="col-md-8 offset-md-2">
+                {% if anamnesis_episodes_list %}
+                    <label for="episode_select" class="form-label fw-bold">Seleccionar Episodio / Visita Inicial:</label>
+                    <select class="form-select form-select-sm" id="episode_select">
+                        {% for episode in anamnesis_episodes_list %}
+                            <option value="{{ episode.id_anamnesis }}" {% if episode.id_anamnesis == loaded_episode_id %}selected{% endif %}>
+                                {{ episode.fecha }} - {{ episode.condicion1 or '(Sin Descripción)' }}
+                                {% if loop.first and not request.args.get('episode_id') %} (Más Reciente){% endif %}
+                            </option>
+                        {% endfor %}
+                    </select>
+                {% else %}
+                    <p class="text-center text-muted">No hay registros de Anamnesis disponibles.</p>
+                {% endif %}
+            </div>
+        </div>
+         {# --- FIN Selector de Episodio --- #}
+
+        {# --- Sección 1: Datos Demográficos --- #}
+        <div class="report-section">
+             <h4>Datos Demográficos</h4>
+              <div class="row"> <div class="col-md-12"> <div class="data-row"><span class="data-label">Nombre:</span> <span class="data-value">{{ data.patient.nombre }} {{ data.patient.apellidop }} {{ data.patient.apellidom or '' }}</span></div> <div class="data-row"><span class="data-label">Fecha Nacimiento:</span> <span class="data-value">{{ data.patient.nacimiento or 'N/A' }}</span></div> <div class="data-row"><span class="data-label">Dirección:</span> <span class="data-value">{{ data.patient.direccion or 'N/A' }}</span></div> <div class="data-row"><span class="data-label">Tel. Celular:</span> <span class="data-value">{{ data.patient.cel or 'N/A' }}</span></div> <div class="data-row"><span class="data-label">Tel. Casa:</span> <span class="data-value">{{ data.patient.telcasa or 'N/A' }}</span></div> <div class="data-row"><span class="data-label">E-mail:</span> <span class="data-value">{{ data.patient.correo or 'N/A' }}</span></div> </div> <div class="col-md-12 mt-2"> <div class="data-row"><span class="data-label">Estado Civil:</span> <span class="data-value">{{ data.patient.estadocivil or 'N/A' }}</span></div> <div class="data-row"><span class="data-label">Ocupación:</span> <span class="data-value">{{ data.patient.ocupacion or 'N/A' }}</span></div> <div class="data-row"><span class="data-label">Hijos (Cant/Edades):</span> <span class="data-value">{{ data.patient.hijos or 'N/A' }}</span></div> <div class="data-row"><span class="data-label">Contacto Emergencia:</span> <span class="data-value">{{ data.patient.contacto or 'N/A' }} ({{ data.patient.parentesco or 'N/A' }}) - {{ data.patient.emergencia or 'N/A' }}</span></div> <div class="data-row"><span class="data-label">¿Cómo se enteró?:</span> <span class="data-value">{{ data.patient.comoentero or 'N/A' }}</span></div> <div class="data-row"><span class="data-label">Fecha Registro Paciente:</span> <span class="data-value">{{ data.patient.fecha or 'N/A' }}</span></div> </div> </div>
+        </div>
+
+        {# --- Sección 2: Anamnesis (del episodio seleccionado) --- #}
+        <div class="report-section">
+             <h4>Anamnesis (Visita Inicial del Episodio: {{ data.anamnesis.fecha or 'N/A' }})</h4>
+              <div class="data-row"><span class="data-label">Condición Principal #1:</span> <span class="data-value">{{ data.anamnesis.get('condicion1', '-') }} (Severidad: {{ data.anamnesis.get('calif1', 'N/A') }}/10)</span></div> {% if data.anamnesis.get('condicion2') %}<div class="data-row"><span class="data-label">Condición Principal #2:</span> <span class="data-value">{{ data.anamnesis.condicion2 }} (Severidad: {{ data.anamnesis.get('calif2', 'N/A') }}/10)</span></div>{% endif %} {% if data.anamnesis.get('condicion3') %}<div class="data-row"><span class="data-label">Condición Principal #3:</span> <span class="data-value">{{ data.anamnesis.condicion3 }} (Severidad: {{ data.anamnesis.get('calif3', 'N/A') }}/10)</span></div>{% endif %} <hr class="my-2"> <div class="data-row"><span class="data-label">Comienzo:</span> <span class="data-value">{{ data.como_comenzo_text or 'N/A' }}</span></div> <div class="data-row"><span class="data-label">Primera Vez Similar:</span> <span class="data-value">{{ data.anamnesis.get('primera_vez', 'N/A') }}</span></div> <div class="data-row"><span class="data-label">Alivia con:</span> <span class="data-value">{{ data.anamnesis.get('alivia', 'N/A') }}</span></div> <div class="data-row"><span class="data-label">Empeora con:</span> <span class="data-value">{{ data.anamnesis.get('empeora', 'N/A') }}</span></div> <div class="data-row"><span class="data-label">Origen Atribuido:</span> <span class="data-value">{{ data.anamnesis.get('como_ocurrio', 'N/A') }}</span></div> <div class="data-row"><span class="data-label">Actividades Afectadas:</span> <span class="data-value">{{ data.anamnesis.get('actividades_afectadas', 'N/A') }}</span></div> <div class="data-row"><span class="data-label">Dolor Más Intenso:</span> <span class="data-value">{{ data.dolor_intenso_text | join(', ') or 'N/A' }}</span></div> <div class="data-row"><span class="data-label">Tipo de Dolor:</span> <span class="data-value">{{ data.tipo_dolor_text | join(', ') or 'N/A' }}</span></div> <div class="mt-2"><strong>Historia Narrativa:</strong><p style="white-space: pre-wrap; font-size: 0.9em; background-color:#f8f9fa; padding: 5px; border-radius: 3px;">{{ data.anamnesis.get('historia', 'No disponible.') }}</p></div> <div class="mt-3"><strong>Diagrama Corporal (Anamnesis):</strong><div class="report-diagram-container"><img src="{{ url_for('static', filename='img/body_diagram.png') }}" alt="Diagrama Corporal">{% for area_id, coords in DIAGRAMA_PUNTOS_COORDENADAS.items() %}{% if area_id in data.diagrama_puntos %}<div class="report-diagram-marker" title="{{ area_id }}" style="top: {{ coords.top }}; left: {{ coords.left }};"></div>{% endif %}{% endfor %}</div></div>
+        </div>
+
+         {# --- Sección 3: Antecedentes (Correspondientes a la fecha de inicio del episodio) --- #}
+         <div class="report-section">
+             <h4>Antecedentes (Registrados el: {{ data.antecedente.fecha or data.anamnesis.fecha or 'N/A' }})</h4>
+              <div class="row"> <div class="col-md-6"> <strong>Condiciones Diagnosticadas:</strong> <ul class="list-unstyled mt-1"> {% if data.cond_diag_text %} {% for cond in data.cond_diag_text %}<li><i class="fas fa-check text-success"></i> {{ cond }}</li>{% endfor %} {% else %}<li><small class="text-muted">Ninguna indicada</small></li>{% endif %} </ul> <div class="data-row"><span class="data-label">Triglicéridos/Colesterol:</span> <span class="data-value">{{ data.antecedente.get('trigliceridos', 'N/A') }}</span></div> <div class="data-row"><span class="data-label">Presión Alta:</span> <span class="data-value">{{ data.antecedente.get('presion_alta', 'N/A') }}</span></div> <div class="data-row"><span class="data-label">Diabetes:</span> <span class="data-value">{{ data.antecedente.get('diabetes', 'N/A') }}</span></div> <div class="data-row"><span class="data-label">Agua (L/día):</span> <span class="data-value">{{ data.antecedente.get('agua', 'N/A') }}</span></div> </div> <div class="col-md-6"> <strong>Medidas:</strong><br> <div class="data-row"><span class="data-label">Peso (Kg):</span> <span class="data-value">{{ data.antecedente.get('peso', 'N/A') }}</span></div> <div class="data-row"><span class="data-label">Altura (m):</span> <span class="data-value">{{ data.antecedente.get('altura', 'N/A') }}</span></div> <div class="data-row"><span class="data-label"># Calzado:</span> <span class="data-value">{{ '%.1f'|format(data.antecedente.get('calzado')|float) if data.antecedente.get('calzado') is not none else 'N/A' }}</span></div> <div class="mt-2"><strong>Notas (Antecedentes):</strong> <p style="white-space: pre-wrap; font-size: 0.9em; background-color:#f8f9fa; padding: 5px; border-radius: 3px;">{{ data.antecedente.get('notas', 'Sin notas.') }}</p> </div> </div> </div>
+         </div>
+
+          {# --- Sección 4: Síntomas Generales (Correspondientes a la fecha de inicio del episodio) --- #}
+          <div class="report-section">
+             <h4>Síntomas Generales Reportados (el {{ data.antecedente.fecha or data.anamnesis.fecha or 'N/A' }})</h4>
+               <div class="row"> <div class="col-md-3 text-center d-none d-md-block"> <img src="{{ url_for('static', filename='img/columna.png') }}" alt="Columna Vertebral" style="max-height: 250px; height: auto; margin-top: 10px;"> </div> <div class="col-md-9"> {% if data.cond_gen_text %} <ul class="list-unstyled mt-1 list-2col"> {% for sintoma_texto in data.cond_gen_text %} <li> <i class="fas fa-check text-success me-2"></i> {{ sintoma_texto }} </li> {% endfor %} </ul> {% else %} <p class="text-muted">No se reportaron síntomas generales específicos en este registro.</p> {% endif %} </div> </div>
+         </div>
+
+         <div class="report-section">
+            <h4>Análisis Postural Visual ({{ data.postura.fecha or data.anamnesis.fecha or 'N/A' }})</h4>
+            {% if data.postura_images and (data.postura_images.frente or data.postura_images.lado or data.postura_images.extra) %}
+                <div class="row text-center g-2">
+                    <div class="col-4">
+                        {% if data.postura_images.frente %}
+                            <a href="{{ data.postura_images.frente }}" target="_blank" title="Ver Vista Frontal">
+                                <img src="{{ data.postura_images.frente }}" alt="Vista Frontal" class="img-fluid rounded border" style="max-height: 250px;">
+                            </a>
+                            <p class="mt-1 mb-0"><small>Frontal</small></p>
+                        {% else %}
+                            <div class="text-muted p-3 border rounded bg-light d-flex align-items-center justify-content-center" style="height: 250px;"><small>Sin imagen frontal</small></div>
+                        {% endif %}
+                    </div>
+                    <div class="col-4">
+                        {% if data.postura_images.lado %}
+                            <a href="{{ data.postura_images.lado }}" target="_blank" title="Ver Vista Lateral Izquierda">
+                                <img src="{{ data.postura_images.lado }}" alt="Vista Lateral Izquierda" class="img-fluid rounded border" style="max-height: 250px;">
+                            </a>
+                            <p class="mt-1 mb-0"><small>Lateral Izquierda</small></p>
+                        {% else %}
+                            <div class="text-muted p-3 border rounded bg-light d-flex align-items-center justify-content-center" style="height: 250px;"><small>Sin imagen lateral izq.</small></div>
+                        {% endif %}
+                    </div>
+                    <div class="col-4">
+                        {% if data.postura_images.extra %}
+                            <a href="{{ data.postura_images.extra }}" target="_blank" title="Ver Vista Lateral Derecha">
+                                <img src="{{ data.postura_images.extra }}" alt="Vista Lateral Derecha" class="img-fluid rounded border" style="max-height: 250px;">
+                            </a>
+                            <p class="mt-1 mb-0"><small>Lateral Derecha</small></p>
+                        {% else %}
+                            <div class="text-muted p-3 border rounded bg-light d-flex align-items-center justify-content-center" style="height: 250px;"><small>Sin imagen lateral der.</small></div>
+                        {% endif %}
+                    </div>
+                </div>
+            {% else %}
+                <p class="text-muted">No hay imágenes de postura asociadas a esta fecha de inicio.</p>
+            {% endif %}
+        </div>
+
+         {# --- Sección 5: Pruebas (Correspondientes a la fecha de inicio del episodio) --- #}
+         <div class="report-section">
+            <h4>Examen de Pisada / Plantografía ({{ data.postura.get('fecha', data.anamnesis.fecha) or 'N/A' }})</h4>
+            <div class="row">
+                {# Columna para las TRES imágenes de pisada #}
+                <div class="col-md-8"> {# Columna más ancha para las imágenes #}
+                    <div class="row text-center g-2"> {# Fila interna para las imágenes #}
+        
+                        {# Imagen Pies Frontal #}
+                        <div class="col-4"> {# Cada imagen en una columna de 4 (3 por fila en md) #}
+                            {% if data.postura.get('pies_frontal') %}
+                                <a href="{{ url_for('static', filename=data.postura.pies_frontal) }}" target="_blank" title="Ver Pies Frontal">
+                                    <img src="{{ url_for('static', filename=data.postura.pies_frontal) }}" alt="Pies Frontal" class="img-fluid rounded border" style="max-height: 150px;"> {# Altura máxima #}
+                                </a>
+                                <p class="mt-1 mb-0"><small>Frontal</small></p>
+                            {% else %}
+                                <div class="text-muted p-3 border rounded bg-light d-flex align-items-center justify-content-center" style="height: 150px;"><small>Sin imagen frontal</small></div>
+                            {% endif %}
+                        </div>
+        
+                        {# Imagen Pies Trasera #}
+                        <div class="col-4">
+                            {% if data.postura.get('pies_trasera') %}
+                                 <a href="{{ url_for('static', filename=data.postura.pies_trasera) }}" target="_blank" title="Ver Pies Trasera">
+                                    <img src="{{ url_for('static', filename=data.postura.pies_trasera) }}" alt="Pies Trasera" class="img-fluid rounded border" style="max-height: 150px;">
+                                </a>
+                                <p class="mt-1 mb-0"><small>Trasera</small></p>
+                            {% else %}
+                                 <div class="text-muted p-3 border rounded bg-light d-flex align-items-center justify-content-center" style="height: 150px;"><small>Sin imagen trasera</small></div>
+                            {% endif %}
+                        </div>
+        
+                        {# Imagen Pisada General (Original) #}
+                        <div class="col-4">
+                            {% if data.postura.get('pies') %}
+                                 <a href="{{ url_for('static', filename=data.postura.pies) }}" target="_blank" title="Ver Pisada General">
+                                    <img src="{{ url_for('static', filename=data.postura.pies) }}" alt="Pisada General" class="img-fluid rounded border" style="max-height: 150px;">
+                                </a>
+                                <p class="mt-1 mb-0"><small>General</small></p>
+                            {% else %}
+                                 <div class="text-muted p-3 border rounded bg-light d-flex align-items-center justify-content-center" style="height: 150px;"><small>Sin imagen general</small></div>
+                            {% endif %}
+                        </div>
+        
+                    </div> {# Fin row interna para imágenes #}
+                </div>{# Fin Columna Imágenes #}
+        
+                {# Columna para los Datos Podales #}
+                <div class="col-md-4"> {# Columna más estrecha para los datos #}
+                    <h5>Datos Podales</h5>
+                    <div class="data-row"><span class="data-label">Pie (cm):</span> <span class="data-value"> {% set pie_cm_val = data.postura.get('pie_cm') %} {{ '%.1f'|format(pie_cm_val|float) if pie_cm_val is not none else 'N/A' }} </span> </div>
+                    <div class="data-row"> <span class="data-label">Zapato (cm):</span> <span class="data-value"> {% set zapato_cm_val = data.postura.get('zapato_cm') %} {{ '%.1f'|format(zapato_cm_val|float) if zapato_cm_val is not none else 'N/A' }} </span> </div>
+                    <div class="data-row"> <span class="data-label">Tipo Calzado:</span> <span class="data-value">{{ data.postura.get('tipo_calzado', 'N/A') }}</span> </div>
+                </div>{# Fin Columna Datos Podales #}
+        
+            </div> {# Fin row principal de la sección #}
+        </div> {# Fin report-section #}
+
+
+
+        {# --- Sección Comparativa de Evolución --- #}
+        <div class="report-section">
+            <h4>Comparativa de Evolución (Episodio iniciado el: {{ data.comparison_initial_anamnesis.fecha or 'N/A' }})</h4>
+
+            {# Verificar si tenemos datos iniciales válidos para la comparación #}
+            {% if data.comparison_initial_anamnesis and data.comparison_initial_anamnesis.id_anamnesis %}
+                {% set initial_anamnesis = data.comparison_initial_anamnesis %}
+                {% set linked_revals = data.comparison_linked_revals %}
+
+                <div class="table-responsive">
+                    <table class="table table-bordered table-sm comparison-table">
+                        <thead>
+                            <tr class="table-light">
+                                <th scope="col" style="min-width: 150px;">Indicador</th>
+                                <th scope="col" class="text-center">
+                                    Inicial<br><small>({{ initial_anamnesis.fecha }})</small>
+                                </th>
+                                {# --- BUCLE PARA COLUMNAS DE REVALORACIÓN --- #}
+                                {% for reval in linked_revals %}
+                                    <th scope="col" class="text-center">
+                                        Reval. {{ loop.index }}<br><small>({{ reval.fecha }})</small>
+                                    </th>
+                                {% endfor %}
+                                {# Columna vacía si no hay revaloraciones aún #}
+                                {% if not linked_revals %}
+                                <th scope="col" class="text-center text-muted"><small>(Sin Revaloraciones Vinculadas)</small></th>
+                                {% endif %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {# --- Fila Condición 1 --- #}
+                            <tr>
+                                <th scope="row">{{ initial_anamnesis.get('condicion1', '-') }}</th>
+                                <td class="text-center">{{ initial_anamnesis.get('calif1', 'N/A') }}/10</td>
+                                {% for reval in linked_revals %}
+                                    {% set current_score = reval.calif1_actual %}
+                                    {% set initial_score_val = initial_anamnesis.get('calif1') %}
+                                    {% set score_class = 'score-same' %}
+                                    {% if current_score is not none and initial_score_val is not none %}
+                                        {% if current_score|int < initial_score_val|int %}{% set score_class = 'score-improved' %}{% endif %}
+                                        {% if current_score|int > initial_score_val|int %}{% set score_class = 'score-worsened' %}{% endif %}
+                                    {% endif %}
+                                    <td class="text-center {{ score_class }}">{{ current_score if current_score is not none else 'N/A' }}/10</td>
+                                {% endfor %}
+                                {% if not linked_revals %}<td></td>{% endif %}
+                            </tr>
+
+                            {# --- Filas Condición 2 (si aplica) --- #}
+                            {% if initial_anamnesis.get('condicion2') %}
+                                <tr>
+                                    <th scope="row">{{ initial_anamnesis.condicion2 }}</th>
+                                    <td class="text-center">{{ initial_anamnesis.get('calif2', 'N/A') }}/10</td>
+                                    {% for reval in linked_revals %}
+                                        {% set current_score = reval.calif2_actual %}
+                                        {% set initial_score_val = initial_anamnesis.get('calif2') %}
+                                        {% set score_class = 'score-same' %}
+                                        {% if current_score is not none and initial_score_val is not none %}
+                                            {% if current_score|int < initial_score_val|int %}{% set score_class = 'score-improved' %}{% endif %}
+                                            {% if current_score|int > initial_score_val|int %}{% set score_class = 'score-worsened' %}{% endif %}
+                                        {% endif %}
+                                        <td class="text-center {{ score_class }}">{{ current_score if current_score is not none else 'N/A' }}/10</td>
+                                    {% endfor %}
+                                    {% if not linked_revals %}<td></td>{% endif %}
+                                </tr>
+                            {% endif %}
+
+                            {# --- Filas Condición 3 (si aplica) --- #}
+                            {% if initial_anamnesis.get('condicion3') %}
+                                <tr>
+                                    <th scope="row">{{ initial_anamnesis.condicion3 }}</th>
+                                    <td class="text-center">{{ initial_anamnesis.get('calif3', 'N/A') }}/10</td>
+                                    {% for reval in linked_revals %}
+                                        {% set current_score = reval.calif3_actual %}
+                                        {% set initial_score_val = initial_anamnesis.get('calif3') %}
+                                        {% set score_class = 'score-same' %}
+                                        {% if current_score is not none and initial_score_val is not none %}
+                                            {% if current_score|int < initial_score_val|int %}{% set score_class = 'score-improved' %}{% endif %}
+                                            {% if current_score|int > initial_score_val|int %}{% set score_class = 'score-worsened' %}{% endif %}
+                                        {% endif %}
+                                        <td class="text-center {{ score_class }}">{{ current_score if current_score is not none else 'N/A' }}/10</td>
+                                    {% endfor %}
+                                    {% if not linked_revals %}<td></td>{% endif %}
+                                </tr>
+                            {% endif %}
+
+                            {# --- Fila Mejora Subjetiva --- #}
+                            <tr>
+                                <th scope="row">Mejora Subj. (%)</th>
+                                <td class="text-center">-</td>
+                                {% for reval in linked_revals %}
+                                    <td class="text-center">{{ reval.mejora_subjetiva_pct if reval.mejora_subjetiva_pct is not none else 'N/A' }}%</td>
+                                {% endfor %}
+                                {% if not linked_revals %}<td></td>{% endif %}
+                            </tr>
+
+                            <tr>
+                                <th scope="row" style="white-space: nowrap;">Pruebas/Evolución</th>
+                            
+                                {# Columna INICIAL: Toma las notas de la tabla 'postura' (notas_pruebas_ortoneuro) #}
+                                <td class="text-center">
+                                    {{ data.postura.get('notas_pruebas_ortoneuro') if data.postura and data.postura.get('notas_pruebas_ortoneuro') else '(Sin notas de pruebas iniciales)' }}
+                                </td>
+                            
+                                {# Columnas de REVALORACIÓN: Toman las notas de la tabla 'revaloraciones' (notas_adicionales_reval) #}
+                                {% for reval in data.comparison_linked_revals %}
+                                    <td class="text-center">
+                                        {{ reval.notas_adicionales_reval if reval.notas_adicionales_reval else '(Sin notas de revaloración)' }}
+                                    </td>
+                                {% endfor %}
+                            
+                                {# Celda vacía si no hay revaloraciones para mantener la estructura de la tabla #}
+                                {% if not data.comparison_linked_revals %}
+                                    <td></td>
+                                {% endif %}
+                            </tr>
+
+                            {# --- Fila Diagrama Corporal --- #}
+                            <tr>
+                                <th scope="row">Diagrama</th>
+                                <td class="text-center">
+                                    {% set initial_diagram_puntos = initial_anamnesis.get('diagrama', '0,').split(',') %}
+                                    <div class="report-diagram-container mx-auto" style="max-width: 150px;">
+                                        <img src="{{ url_for('static', filename='img/body_diagram.png') }}" alt="Diagrama Inicial">
+                                        {% for area_id, coords in DIAGRAMA_PUNTOS_COORDENADAS.items() %}
+                                            {% if area_id in initial_diagram_puntos %}
+                                                <div class="report-diagram-marker" title="{{ area_id }}" style="top: {{ coords.top }}; left: {{ coords.left }}; width:6px; height:6px;"></div>
+                                            {% endif %}
+                                        {% endfor %}
+                                    </div>
+                                    <small>(Anam. Inicial)</small>
+                                </td>
+                                {% for reval in linked_revals %}
+                                <td class="text-center">
+                                    {% set reval_diagram_puntos = reval.get('diagrama_actual', '0,').split(',') %}
+                                    <div class="report-diagram-container mx-auto" style="max-width: 150px;">
+                                        <img src="{{ url_for('static', filename='img/body_diagram.png') }}" alt="Diagrama Reval. {{ loop.index }}">
+                                        {% for area_id, coords in DIAGRAMA_PUNTOS_COORDENADAS.items() %}
+                                            {% if area_id in reval_diagram_puntos %}
+                                                <div class="report-diagram-marker" title="{{ area_id }}" style="top: {{ coords.top }}; left: {{ coords.left }}; width:6px; height:6px;"></div>
+                                            {% endif %}
+                                        {% endfor %}
+                                    </div>
+                                    <small>(Reval. {{ loop.index }})</small>
+                                </td>
+                                {% endfor %}
+                                {% if not linked_revals %}<td></td>{% endif %}
+                            </tr>
+
+                        </tbody>
+                    </table>
+                </div> {# Fin table-responsive #}
+
+                {% if not linked_revals %}
+                    <p class="text-muted small mt-2">Aún no hay revaloraciones vinculadas a esta visita inicial para mostrar en la comparativa.</p>
+                {% endif %}
+
+            {% else %}
+                <p class="text-muted">No se encontró la anamnesis inicial seleccionada para mostrar la comparativa de evolución.</p>
+            {% endif %}
+        </div>
+        {# --- FIN Sección Comparativa --- #}
+
+        {# --- RADIOGRAFÍAS (Muestra las asociadas a la Postura de la fecha de inicio del episodio) --- #}
+         <div class="report-section" id="radiografias-section">
+              <h4>Radiografías (Asociadas a Pruebas del: {{ data.postura.fecha or data.anamnesis.fecha or 'N/A' }})</h4>
+              {% if data.rx_list %}
+                <div class="image-container" id="radiografias-images"> 
+                    {% for rx in data.rx_list %} 
+                        <div class="rx-list-item"> 
+                            <a href="{{ url_for('static', filename=rx.ruta_archivo) }}" target="_blank" title="Ver imagen: {{ rx.ruta_archivo.split('/')[-1] }}">
+                                <img src="{{ url_for('static', filename=rx.ruta_archivo) }}" alt="Radiografía {{ loop.index }}" class="rx-list-item img">
+                            </a>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <p class="text-muted">No hay radiografías...</p>
+            {% endif %}
+         </div>
+
+
+        {# --- Botones (REINTRODUCIDOS) --- #}
+        <div class="text-center mt-4 mb-4 d-print-none">
+             <button onclick="window.print();" class="btn btn-primary"><i class="fas fa-print me-2"></i>Imprimir Reporte</button>
+             <a href="{{ url_for('patient.patient_detail', patient_id=data.patient.id_px) }}" class="btn btn-secondary">Volver a Detalles</a>
+        </div>
+
+         {# --- Pie de Página (REINTRODUCIDO) --- #}
+        <footer class="report-footer mt-5 pt-3 border-top text-center text-muted d-none d-print-block">
+            <small>
+                **Chiropractic Care Center**<br>
+                Villa de cortes #1, villas de cuautitlan cp54857 <br>
+                Tel: 5528448659 / 5557397447
+            </small>
+        </footer>
+
+    </div> {# Fin report-container #}
+
+    {# --- Script para el selector de EPISODIO --- #}
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const episodeSelect = document.getElementById('episode_select'); // ID correcto
+            if (episodeSelect) {
+                episodeSelect.addEventListener('change', function() {
+                    const selectedEpisodeId = this.value; // El valor es id_anamnesis
+                    const baseUrl = "{{ url_for('clinical.generate_patient_report', patient_id=data.patient.id_px) }}";
+                    const url = new URL(baseUrl, window.location.origin);
+                    if (selectedEpisodeId) {
+                         url.searchParams.set('episode_id', selectedEpisodeId); // Usar episode_id
+                    }
+                    window.location.href = url.toString();
+                });
+            } else {
+                 console.error("Dropdown 'episode_select' no encontrado.");
+            }
+        });
+    </script>
+
+</body>
+</html>

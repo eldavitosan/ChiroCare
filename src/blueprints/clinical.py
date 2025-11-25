@@ -37,12 +37,12 @@ from database import (
     get_specific_plan_cuidado_by_date, save_plan_cuidado, get_productos_servicios_by_type,
     get_productos_by_ids, get_latest_antecedente_on_or_before_date, 
     get_productos_servicios_venta, save_recibo, get_specific_recibo, 
-    get_active_plans_for_patient,get_seguimientos_for_plan,
+    get_plan_cuidado_activo_para_paciente, get_seguimientos_for_plan,
     get_recibo_detalles_by_id, get_all_doctors, #get_resumen_dia_anterior,
     get_recibos_by_patient, get_recibo_by_id, get_centro_by_id,
     get_first_postura_on_or_after_date, get_active_plan_status,
     update_postura_ortho_notes, analizar_adicionales_plan, get_historial_compras_paciente,
-    mark_notes_as_seen,add_general_note
+    mark_notes_as_seen,add_general_note, get_latest_postura_on_or_before_date
 )
 
 # Importar los decoradores
@@ -3395,29 +3395,7 @@ def generar_reporte_integral_pdf(patient_id):
         if connection and connection.is_connected():
             connection.close()
 
-def get_plan_cuidado_activo_para_paciente(connection, id_px):
-    """
-    Obtiene el plan de cuidado más reciente para un paciente, considerado como el "activo".
-    """
-    cursor = None
-    try:
-        query = """
-            SELECT id_plan, fecha, pb_diagnostico
-            FROM plancuidado
-            WHERE id_px = %s
-            ORDER BY STR_TO_DATE(fecha, '%d/%m/%Y') DESC, id_plan DESC
-            LIMIT 1;
-        """
-        cursor = connection.cursor(dictionary=True, buffered=True)
-        cursor.execute(query, (id_px,))
-        plan = cursor.fetchone()
-        return plan # Devuelve el plan más reciente o None
-    except Error as e:
-        print(f"Error obteniendo plan activo para paciente ID {id_px}: {e}")
-        return None
-    finally:
-        if cursor:
-            cursor.close()
+
 
 @clinical_bp.route('/comparador')
 @login_required
@@ -3539,31 +3517,7 @@ def reporte_visual_fechado(patient_id):
         if connection and connection.is_connected():
             connection.close()
 
-def get_latest_postura_on_or_before_date(connection, patient_id, target_date_str):
-    """
-    Encuentra el registro de postura más reciente para un paciente
-    en o antes de una fecha específica (formato dd/mm/yyyy).
-    """
-    cursor = None
-    tabla_posturas = "postura" 
-    try:
-        cursor = connection.cursor(dictionary=True)
-        sql = f"""
-            SELECT *
-            FROM {tabla_posturas}
-            WHERE id_px = %s AND STR_TO_DATE(fecha, '%d/%m/%Y') <= STR_TO_DATE(%s, '%d/%m/%Y')
-            ORDER BY STR_TO_DATE(fecha, '%d/%m/%Y') DESC, id_postura DESC
-            LIMIT 1;
-        """
-        cursor.execute(sql, (patient_id, target_date_str))
-        result = cursor.fetchone()
-        return result
-    except Error as e:
-        print(f"Error en get_latest_postura_on_or_before_date: {e}")
-        return None
-    finally:
-        if cursor:
-            cursor.close()
+
 
 
 @clinical_bp.route('/api/mark_notes_seen', methods=['POST'])

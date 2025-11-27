@@ -863,17 +863,26 @@ def get_specific_revaloracion(connection, id_revaloracion):
     """
     cursor = None
     try:
-        # Seleccionar TODAS las columnas, incluyendo las nuevas de imagen
+        # Seleccionar TODAS las columnas, incluyendo las nuevas de imagen (aliased desde postura)
         query = """
-            SELECT id_revaloracion, id_px, id_dr, fecha, id_anamnesis_inicial,
-                   id_postura_asociado,  -- <-- AÑADIDO
-                   calif1_actual, calif2_actual, calif3_actual,
-                   mejora_subjetiva_pct,
-                   notas_adicionales_reval,
-                   diagrama_actual,
-                   fecha_registro
-            FROM revaloraciones
-            WHERE id_revaloracion = %s
+            SELECT r.id_revaloracion, r.id_px, r.id_dr, r.fecha, r.id_anamnesis_inicial,
+                   r.id_postura_asociado,
+                   r.calif1_actual, r.calif2_actual, r.calif3_actual,
+                   r.mejora_subjetiva_pct,
+                   r.notas_adicionales_reval,
+                   r.diagrama_actual,
+                   r.fecha_registro,
+                   -- Columnas de imagen desde postura (aliased para compatibilidad)
+                   p.frente AS frente_path,
+                   p.lado AS lado1_path,
+                   p.postura_extra AS lado2_path,
+                   p.pies AS pies_path,
+                   p.termografia AS termografia_path,
+                   p.pies_frontal AS pies_frontal_path,
+                   p.pies_trasera AS pies_trasera_path
+            FROM revaloraciones r
+            LEFT JOIN postura p ON r.id_postura_asociado = p.id_postura
+            WHERE r.id_revaloracion = %s
         """
         cursor = connection.cursor(dictionary=True, buffered=True)
         cursor.execute(query, (id_revaloracion,))
@@ -1073,17 +1082,24 @@ def get_latest_revaloracion_overall(connection, patient_id):
     cursor = None
     try:
         query = """
-            SELECT id_revaloracion, id_px, id_dr, fecha, id_anamnesis_inicial,
-                   calif1_actual, calif2_actual, calif3_actual,
-                   mejora_subjetiva_pct, -- Se mantiene
-                   notas_adicionales_reval, -- <-- AÑADIDA
-                   diagrama_actual,
-                   frente_path, lado1_path, lado2_path, pies_path, termografia_path,
-                   pies_frontal_path, pies_trasera_path,
-                   fecha_registro
-            FROM revaloraciones
-            WHERE id_px = %s
-            ORDER BY fecha DESC, id_revaloracion DESC
+            SELECT r.id_revaloracion, r.id_px, r.id_dr, r.fecha, r.id_anamnesis_inicial,
+                   r.calif1_actual, r.calif2_actual, r.calif3_actual,
+                   r.mejora_subjetiva_pct,
+                   r.notas_adicionales_reval,
+                   r.diagrama_actual,
+                   r.fecha_registro,
+                   -- Columnas de imagen desde postura (aliased)
+                   p.frente AS frente_path,
+                   p.lado AS lado1_path,
+                   p.postura_extra AS lado2_path,
+                   p.pies AS pies_path,
+                   p.termografia AS termografia_path,
+                   p.pies_frontal AS pies_frontal_path,
+                   p.pies_trasera AS pies_trasera_path
+            FROM revaloraciones r
+            LEFT JOIN postura p ON r.id_postura_asociado = p.id_postura
+            WHERE r.id_px = %s
+            ORDER BY r.fecha DESC, r.id_revaloracion DESC
             LIMIT 1
         """
         cursor = connection.cursor(dictionary=True, buffered=True)
@@ -2008,7 +2024,16 @@ def save_recibo(connection, datos_recibo, detalles_recibo):
 
     try:
         try:
-            fecha_sql_str = parse_date(datos_recibo.get('fecha'))
+            fecha_obj = parse_date(datos_recibo.get('fecha'))
+            if not fecha_obj:
+                 raise ValueError("Fecha vacía o inválida")
+            
+            # Asegurar explícitamente que sea un string YYYY-MM-DD
+            if isinstance(fecha_obj, (date, datetime)):
+                fecha_sql_str = fecha_obj.strftime('%Y-%m-%d')
+            else:
+                fecha_sql_str = str(fecha_obj) # Fallback por si acaso
+
         except ValueError as e:
             print(f"Error fatal (save_recibo): {e}")
             raise Error(f"La fecha '{datos_recibo.get('fecha')}' tiene un formato inválido.")
@@ -3729,41 +3754,28 @@ def get_resumen_dia_anterior(connection):
 
         cursor = connection.cursor(dictionary=True)
         
-        # --- INICIO LÓGICA DE BÚSQUEDA ---
-        today = datetime.now()
-        dias_a_restar = 1
+        # --- INICIO LÓGICA DE BÚSQUEDA (OPTIMIZADA) ---
+        print("DEBUG: Buscando última fecha con registros en los últimos 30 días...")
+        
+        # Consulta optimizada: Obtener la fecha máxima en el rango de los últimos 30 días
+        query_ultima_fecha = """
+            SELECT MAX(fecha) as ultima_fecha 
+            FROM quiropractico 
+            WHERE fecha >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+        """
+        cursor.execute(query_ultima_fecha)
+        result = cursor.fetchone()
+        
         fecha_encontrada_str = None
-
-        print(f"DEBUG: Fecha de hoy: {today}")
-
-        while dias_a_restar <= 30: 
-            fecha_a_evaluar_dt = today - timedelta(days=dias_a_restar)
-            fecha_a_evaluar_str = fecha_a_evaluar_dt.strftime('%Y-%m-%d') # Usar formato SQL
-            
-            # Imprimimos qué fecha estamos buscando
-            print(f"DEBUG: Buscando registros para la fecha: {fecha_a_evaluar_str} (Iteración {dias_a_restar})")
-            
-            # Consulta directa usando la fecha string YYYY-MM-DD (que es lo que fecha_a_evaluar_str debería ser si usamos parse_date, pero aquí se genera manual)
-            # Ajustamos la generación de fecha arriba para que sea YYYY-MM-DD
-            sql_check_fecha = "SELECT 1 FROM quiropractico WHERE fecha = %s LIMIT 1;"
-            
-            # DEBUG: Imprimir la consulta que se va a ejecutar
-            # (Nota: No podemos ver la query final con los valores inyectados fácilmente, pero vemos la estructura)
-            # print(f"DEBUG SQL Check: {sql_check_fecha} con valor {fecha_a_evaluar_str}")
-
-            cursor.execute(sql_check_fecha, (fecha_a_evaluar_str,))
-            found = cursor.fetchone()
-            
-            if found: 
-                print(f"DEBUG: ¡ENCONTRADO! Hay datos en la fecha {fecha_a_evaluar_str}")
-                fecha_encontrada_str = fecha_a_evaluar_str
-                break 
+        if result and result.get('ultima_fecha'):
+            # Asegurar formato YYYY-MM-DD
+            fecha_obj = result['ultima_fecha']
+            if isinstance(fecha_obj, str):
+                fecha_encontrada_str = fecha_obj
             else:
-                print(f"DEBUG: No se encontraron datos en {fecha_a_evaluar_str}")
-            
-            dias_a_restar += 1
-            
-        if not fecha_encontrada_str:
+                fecha_encontrada_str = fecha_obj.strftime('%Y-%m-%d')
+            print(f"DEBUG: ¡ENCONTRADO! Última fecha con datos: {fecha_encontrada_str}")
+        else:
             print("ADVERTENCIA: No se encontraron seguimientos en los últimos 30 días.")
             return [] 
 

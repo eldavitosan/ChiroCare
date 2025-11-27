@@ -23,6 +23,7 @@ from database import (
     add_producto_servicio, update_producto_servicio, 
     set_producto_servicio_active_status
 )
+from utils.date_manager import to_frontend_str
 
 # Importar los decoradores
 from decorators import login_required, admin_required
@@ -171,7 +172,7 @@ def admin_dashboard():
         
         num_pacientes = count_total_pacientes(connection)
         num_doctores = count_total_doctores(connection)
-        today_for_db = datetime.now().strftime('%d/%m/%Y')
+        today_for_db = to_frontend_str(datetime.now())
         num_seguimientos_hoy = count_seguimientos_hoy(connection, today_for_db)
         
         return render_template('admin/dashboard_admin.html',

@@ -1,6 +1,6 @@
 import os
 from flask import (
-    Blueprint, render_template, request, redirect, jsonify, session, flash, url_for
+    Blueprint, render_template, request, redirect, jsonify, session, flash, url_for, current_app
 )
 from mysql.connector import Error
 from datetime import datetime
@@ -14,7 +14,7 @@ from database import (
     get_plan_cuidado_activo_para_paciente, analizar_adicionales_plan,
     get_postura_summary, get_active_plan_status, get_unseen_notes_for_patient
 )
-
+from utils.date_manager import to_frontend_str, to_db_str, parse_date, parse_date
 # Importar los decoradores
 from decorators import login_required, admin_required
 
@@ -44,7 +44,7 @@ def add_patient_route():
                 flash("Error de sesión. Inicie sesión de nuevo.", 'danger')
                 return redirect(url_for('auth.login'))
 
-            fecha_registro = datetime.now().strftime('%d/%m/%Y')
+            fecha_registro = to_frontend_str(datetime.now())
             
             # --- 3. Obtener datos limpios desde form.campo.data ---
             # ¡Adiós a todos los request.form.get() y .strip()!
@@ -52,7 +52,7 @@ def add_patient_route():
             # Manejo especial para la fecha (viene como objeto date)
             nacimiento_fmt = ''
             if form.nacimiento.data:
-                nacimiento_fmt = form.nacimiento.data.strftime('%d/%m/%Y')
+                nacimiento_fmt = to_frontend_str(form.nacimiento.data)
             
             # Manejo de números (vienen como None si están vacíos gracias a Optional())
             # La base de datos espera 0 si está vacío, o el número.
@@ -92,7 +92,7 @@ def add_patient_route():
                 flash('Hubo un error al registrar el paciente.', 'danger')
 
         except Exception as ex:
-            print(f"Error inesperado en add_patient_route: {ex}") 
+            current_app.logger.error(f"Error inesperado en add_patient_route: {ex}")
             flash(f"Ocurrió un error inesperado.", 'danger')
         finally:
             if connection and connection.is_connected():
@@ -127,7 +127,7 @@ def patient_detail(patient_id):
         if active_plan_info:
             adicionales_status = analizar_adicionales_plan(connection, active_plan_info['id_plan'])
 
-        today_str = datetime.now().strftime('%d/%m/%Y')
+        today_str = to_frontend_str(datetime.now())
         todays_antecedente = get_specific_antecedente_by_date(connection, patient_id, today_str)
         has_antecedentes_today = (todays_antecedente is not None)
         todays_antecedente_id = todays_antecedente.get('id_antecedente') if todays_antecedente else None
@@ -145,7 +145,7 @@ def patient_detail(patient_id):
                                )
 
     except Exception as e:
-        print(f"Error en patient_detail para patient_id {patient_id}: {e}") # CAMBIO
+        current_app.logger.error(f"Error en patient_detail para patient_id {patient_id}: {e}")
         flash('Ocurrió un error al cargar los detalles del paciente.', 'danger')
         return redirect(url_for('main')) # CAMBIO: 'main'
     finally:
@@ -185,7 +185,7 @@ def edit_patient_route(patient_id):
             
             # Convertir objeto 'date' de WTForms a string 'dd/mm/YYYY'
             if form.nacimiento.data:
-                patient_data_to_update['nacimiento'] = form.nacimiento.data.strftime('%d/%m/%Y')
+                patient_data_to_update['nacimiento'] = to_frontend_str(form.nacimiento.data)
             else:
                 patient_data_to_update['nacimiento'] = '' # O None, según tu BBDD
             
@@ -221,10 +221,7 @@ def edit_patient_route(patient_id):
             # Convertir el string 'dd/mm/YYYY' de la BBDD a un objeto 'date'
             # que el campo DateField de WTForms puede entender.
             if patient_data_for_form.get('nacimiento'):
-                try:
-                    patient_data_for_form['nacimiento'] = datetime.strptime(patient_data_for_form['nacimiento'], '%d/%m/%Y').date()
-                except ValueError:
-                    patient_data_for_form['nacimiento'] = None
+                patient_data_for_form['nacimiento'] = parse_date(patient_data_for_form['nacimiento'])
             
             # Instanciar el formulario CON los datos del paciente
             form = PatientForm(data=patient_data_for_form)
@@ -235,7 +232,7 @@ def edit_patient_route(patient_id):
         return render_template('edit_patient.html', form=form, patient=patient)
 
     except Exception as e:
-        print(f"Error en edit_patient_route (PID {patient_id}): {e}")
+        current_app.logger.error(f"Error en edit_patient_route (PID {patient_id}): {e}")
         flash('Ocurrió un error inesperado al editar el paciente.', 'danger')
         return redirect(url_for('patient.patient_detail', patient_id=patient_id))
     finally:
@@ -251,12 +248,12 @@ def api_search_patients():
         connection = connect_to_db()
         if not connection:
              return jsonify({"error": "Database connection failed"}), 500 
-
+        
         patients = search_patients_by_name(connection, search_term)
         return jsonify(patients) 
 
     except Exception as e:
-        print(f"Error en API search_patients: {e}") # CAMBIO
+        current_app.logger.error(f"Error en API search_patients: {e}")
         return jsonify({"error": "Error interno del servidor"}), 500
     finally:
         if connection and connection.is_connected():

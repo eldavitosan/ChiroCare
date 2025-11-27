@@ -3,6 +3,7 @@ import mysql.connector
 from mysql.connector import Error, IntegrityError
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date
+from utils.date_manager import to_db_str, to_frontend_str, calculate_age, parse_date
 import os
 from dotenv import load_dotenv
 from datetime import timedelta
@@ -38,25 +39,6 @@ def connect_to_db():
         print(f"Error while connecting to MySQL: {e}")
         return None
     return None # Asegurar que siempre devuelva algo
-
-def hash_password(password):
-    """Hashes the password."""
-    # Usar un método más moderno si es posible, pero sha256 es común
-    return generate_password_hash(password, method='pbkdf2:sha256')
-
-def parse_frontend_date(date_str):
-    """
-    Parsea una fecha en formato 'dd/mm/yyyy' (frontend) a 'YYYY-MM-DD' (SQL).
-    Lanza ValueError si el formato es incorrecto o la fecha es nula.
-    """
-    if not date_str:
-        raise ValueError("La fecha no puede ser nula.")
-    try:
-        fecha_obj = datetime.strptime(date_str, '%d/%m/%Y')
-        return fecha_obj.strftime('%Y-%m-%d')
-    except (ValueError, TypeError):
-        raise ValueError(f"Formato de fecha inválido: '{date_str}'. Se espera dd/mm/yyyy.")
-
 def add_user(connection, nombre, usuario, password_plain, centro):
     """
     Añade un nuevo doctor/usuario a la tabla 'dr'.
@@ -190,6 +172,11 @@ def get_patient_by_id(connection, patient_id):
         cursor = connection.cursor(dictionary=True, buffered=True)
         cursor.execute(query, (patient_id,))
         patient_data = cursor.fetchone()
+        
+        # Convertir fechas para el frontend
+        if patient_data and patient_data.get('nacimiento'):
+            patient_data['nacimiento'] = to_frontend_str(patient_data['nacimiento'])
+            
         return patient_data
     except Error as e:
         print(f"Error buscando paciente por ID: {e}")
@@ -295,7 +282,7 @@ def get_specific_antecedente_by_date(connection, patient_id, fecha_str):
     """Obtiene los datos y el ID del antecedente para un paciente en una fecha específica."""
     cursor = None
     try:
-        fecha_sql = parse_frontend_date(fecha_str)
+        fecha_sql = parse_date(fecha_str)
         query = """
             SELECT id_antecedente, id_px, fecha, peso, altura, calzado, condiciones_generales,
                    condicion_diagnosticada, presion_alta, trigliceridos, diabetes, agua, notas
@@ -354,7 +341,7 @@ def save_antecedentes(connection, data):
 
         # Parsear fecha
         try:
-            fecha_sql = parse_frontend_date(data.get('fecha'))
+            fecha_sql = parse_date(data.get('fecha'))
         except ValueError as ve:
             print(f"Error fatal (save_antecedentes): {ve}")
             return False
@@ -465,7 +452,7 @@ def get_specific_anamnesis_by_date(connection, patient_id, fecha_str):
     """Obtiene los datos y el ID del registro de anamnesis para un paciente en una fecha específica."""
     cursor = None
     try:
-        fecha_sql = parse_frontend_date(fecha_str)
+        fecha_sql = parse_date(fecha_str)
         # Selecciona todas las columnas EXCEPTO diagrama, lesión, historia
         query = """
             SELECT id_anamnesis, id_px, fecha, condicion1, calif1, condicion2, calif2,
@@ -514,7 +501,7 @@ def save_anamnesis(connection, data):
 
         # Parsear fecha
         try:
-            fecha_sql = parse_frontend_date(data.get('fecha'))
+            fecha_sql = parse_date(data.get('fecha'))
         except ValueError as ve:
             print(f"Error fatal (save_anamnesis): {ve}")
             return False
@@ -667,7 +654,7 @@ def get_specific_postura_by_date(connection, patient_id, fecha_str):
     """
     cursor = None
     try:
-        fecha_sql_str = parse_frontend_date(fecha_str)
+        fecha_sql_str = parse_date(fecha_str)
     except ValueError as e:
         print(f"Error (get_specific_postura_by_date): {e}")
         return None
@@ -763,7 +750,7 @@ def save_postura(connection, data):
             
             # 2. La convertimos a 'YYYY-MM-DD' usando Python
             try:
-                fecha_str_yyyymmdd = parse_frontend_date(fecha_str_ddmmyyyy)
+                fecha_str_yyyymmdd = to_db_str(fecha_str_ddmmyyyy)
             except ValueError as e:
                 print(f"Error fatal (save_postura): {e}")
                 raise Error(f"La fecha '{fecha_str_ddmmyyyy}' tiene un formato inválido.")
@@ -907,7 +894,7 @@ def get_specific_revaloracion_by_date(connection, patient_id, fecha_str):
     
     # --- !! INICIO DE LA CORRECCIÓN !! ---
     try:
-        fecha_sql_str = parse_frontend_date(fecha_str)
+        fecha_sql_str = parse_date(fecha_str)
     except ValueError as e:
         print(f"Error (get_specific_revaloracion_by_date): {e}")
         return None
@@ -976,7 +963,7 @@ def save_revaloracion(connection, data):
         fecha_sql_str = None
         
         try:
-            fecha_sql_str = parse_frontend_date(fecha_str_ddmmyyyy)
+            fecha_sql_str = parse_date(fecha_str_ddmmyyyy)
         except ValueError as e:
             print(f"Error fatal (save_revaloracion): {e}")
             raise Error(f"La fecha '{fecha_str_ddmmyyyy}' tiene un formato inválido.")
@@ -1132,20 +1119,8 @@ def get_clinical_dates_with_types(connection, patient_id):
                     date_val = row['fecha']
                     formatted_date = None
                     
-                    if isinstance(date_val, date):
-                        formatted_date = date_val.strftime('%d/%m/%Y')
-                    elif isinstance(date_val, str):
-                        # Intentar parsear YYYY-MM-DD (estándar SQL)
-                        try:
-                            dt = datetime.strptime(date_val, '%Y-%m-%d')
-                            formatted_date = dt.strftime('%d/%m/%Y')
-                        except ValueError:
-                            # Intentar parsear dd/mm/yyyy (legacy)
-                            try:
-                                dt = datetime.strptime(date_val, '%d/%m/%Y')
-                                formatted_date = dt.strftime('%d/%m/%Y')
-                            except ValueError:
-                                print(f"WARN: Formato de fecha desconocido: {date_val}")
+                    if isinstance(date_val, (date, datetime, str)):
+                        formatted_date = to_frontend_str(date_val)
                     
                     if formatted_date:
                         all_dates.add(formatted_date)
@@ -1161,10 +1136,9 @@ def get_clinical_dates_with_types(connection, patient_id):
             }
             
             # Convertir fecha_str (dd/mm/yyyy) a SQL (YYYY-MM-DD) para la consulta
-            try:
-                fecha_sql = parse_frontend_date(fecha_str)
-            except ValueError:
-                continue # Skip invalid dates
+            fecha_sql = to_db_str(fecha_str)
+            if not fecha_sql:
+                continue
 
             # Usar "AS flag" para asegurar el nombre de la clave
             query_check = "SELECT EXISTS(SELECT 1 FROM {table} WHERE id_px = %s AND fecha = %s LIMIT 1) AS flag"
@@ -1187,7 +1161,7 @@ def get_clinical_dates_with_types(connection, patient_id):
 
         # 3. Convertir y ordenar
         if not dates_info: return []
-        sorted_list = sorted(dates_info.values(), key=lambda item: datetime.strptime(item['fecha'], '%d/%m/%Y'))
+        sorted_list = sorted(dates_info.values(), key=lambda item: to_db_str(item['fecha']))
         return sorted_list
 
     except Error as e:
@@ -1235,7 +1209,7 @@ def get_latest_anamnesis_on_or_before_date(connection, patient_id, target_date_s
     """
     cursor = None
     try:
-        target_date_obj = datetime.strptime(target_date_str, '%d/%m/%Y')
+        target_date_db = to_db_str(target_date_str)
         query = """
             SELECT id_anamnesis, id_px, fecha, condicion1, calif1, condicion2, calif2,
                    condicion3, calif3, como_comenzo, primera_vez, alivia, empeora,
@@ -1247,7 +1221,7 @@ def get_latest_anamnesis_on_or_before_date(connection, patient_id, target_date_s
             LIMIT 1
         """
         cursor = connection.cursor(dictionary=True, buffered=True)
-        cursor.execute(query, (patient_id, target_date_obj.strftime('%Y-%m-%d')))
+        cursor.execute(query, (patient_id, target_date_db))
         data = cursor.fetchone()
         return data
     except ValueError:
@@ -1356,7 +1330,7 @@ def get_specific_seguimiento_by_date(connection, patient_id, fecha_str):
     """
     cursor = None
     try:
-        fecha_sql_str = parse_frontend_date(fecha_str)
+        fecha_sql_str = parse_date(fecha_str)
     except ValueError as e:
         print(f"Error (get_specific_seguimiento_by_date): {e}")
         return None
@@ -1415,7 +1389,7 @@ def save_seguimiento(connection, data):
 
     try:
         try:
-            fecha_sql_str = parse_frontend_date(data.get('fecha'))
+            fecha_sql_str = parse_date(data.get('fecha'))
         except ValueError as e:
             print(f"Error fatal (save_seguimiento): {e}")
             raise Error(f"La fecha '{data.get('fecha')}' tiene un formato inválido.")
@@ -1693,7 +1667,7 @@ def get_specific_plan_cuidado_by_date(connection, patient_id, fecha_str):
     """Obtiene el plan de cuidado más reciente para un paciente en una fecha específica."""
     cursor = None
     try:
-        fecha_sql_str = parse_frontend_date(fecha_str)
+        fecha_sql_str = parse_date(fecha_str)
     except ValueError as e:
         print(f"Error (get_specific_plan_cuidado_by_date): {e}")
         return None
@@ -1747,7 +1721,7 @@ def save_plan_cuidado(connection, data):
 
     try:
         try:
-            fecha_sql_str = parse_frontend_date(data.get('fecha'))
+            fecha_sql_str = parse_date(data.get('fecha'))
         except ValueError as e:
             print(f"Error fatal (save_plan_cuidado): {e}")
             raise Error(f"La fecha '{data.get('fecha')}' tiene un formato inválido.")
@@ -2034,7 +2008,7 @@ def save_recibo(connection, datos_recibo, detalles_recibo):
 
     try:
         try:
-            fecha_sql_str = parse_frontend_date(datos_recibo.get('fecha'))
+            fecha_sql_str = parse_date(datos_recibo.get('fecha'))
         except ValueError as e:
             print(f"Error fatal (save_recibo): {e}")
             raise Error(f"La fecha '{datos_recibo.get('fecha')}' tiene un formato inválido.")
@@ -3177,6 +3151,9 @@ def get_pacientes_mas_frecuentes(connection, fecha_inicio_str, fecha_fin_str, li
     """
     cursor = None
     try:
+        fecha_inicio_db = to_db_str(fecha_inicio_str)
+        fecha_fin_db = to_db_str(fecha_fin_str)
+        
         query = """
             SELECT 
                 dp.id_px,
@@ -3193,9 +3170,9 @@ def get_pacientes_mas_frecuentes(connection, fecha_inicio_str, fecha_fin_str, li
         """
         cursor = connection.cursor(dictionary=True)
         print(f"Query Reporte Pacientes Frecuentes: {query}")
-        print(f"Params: {fecha_inicio_str}, {fecha_fin_str}, {limit}")
+        print(f"Params: {fecha_inicio_db}, {fecha_fin_db}, {limit}")
         
-        cursor.execute(query, (fecha_inicio_str, fecha_fin_str, limit))
+        cursor.execute(query, (fecha_inicio_db, fecha_fin_db, limit))
         resultados = cursor.fetchall()
         
         return resultados
@@ -3726,9 +3703,7 @@ def get_patients_by_recent_followup(connection, limit=10):
         # Convertir el objeto date a string dd/mm/YYYY para la vista
         if patients:
             for p in patients:
-                fecha_obj = p.get('fecha_ultimo_seguimiento')
-                if isinstance(fecha_obj, date):
-                    p['fecha_ultimo_seguimiento'] = fecha_obj.strftime('%d/%m/%Y')
+                p['fecha_ultimo_seguimiento'] = to_frontend_str(p.get('fecha_ultimo_seguimiento'))
         
         return patients if patients else []
     except Error as e:
@@ -3768,7 +3743,7 @@ def get_resumen_dia_anterior(connection):
             # Imprimimos qué fecha estamos buscando
             print(f"DEBUG: Buscando registros para la fecha: {fecha_a_evaluar_str} (Iteración {dias_a_restar})")
             
-            # Consulta directa usando la fecha string YYYY-MM-DD (que es lo que fecha_a_evaluar_str debería ser si usamos parse_frontend_date, pero aquí se genera manual)
+            # Consulta directa usando la fecha string YYYY-MM-DD (que es lo que fecha_a_evaluar_str debería ser si usamos parse_date, pero aquí se genera manual)
             # Ajustamos la generación de fecha arriba para que sea YYYY-MM-DD
             sql_check_fecha = "SELECT 1 FROM quiropractico WHERE fecha = %s LIMIT 1;"
             
@@ -3947,7 +3922,7 @@ def get_first_postura_on_or_after_date(connection, patient_id, target_date_str):
         
         # Convertir fecha objetivo a YYYY-MM-DD
         try:
-            target_date_sql = parse_frontend_date(target_date_str)
+            target_date_sql = parse_date(target_date_str)
         except ValueError:
              # Si falla (ej. ya viene en YYYY-MM-DD o es inválida), intentamos usarla tal cual o logueamos
              # Asumimos que viene en dd/mm/yyyy como dice el docstring
@@ -4273,7 +4248,7 @@ def get_latest_postura_on_or_before_date(connection, patient_id, target_date_str
     cursor = None
     tabla_posturas = "postura" 
     try:
-        target_date_sql = parse_frontend_date(target_date_str)
+        target_date_sql = parse_date(target_date_str)
         cursor = connection.cursor(dictionary=True)
         sql = f"""
             SELECT *

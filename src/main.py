@@ -13,6 +13,7 @@ from flask import Flask, render_template, request, redirect, jsonify, session, f
 from database import (connect_to_db,  
                       get_patients_by_recent_followup, get_resumen_dia_anterior
                       )
+from utils.date_manager import to_frontend_str
 #from werkzeug.security import check_password_hash
 from werkzeug.utils import secure_filename
 from functools import wraps
@@ -185,7 +186,7 @@ def resumen_dia_anterior():
     """
     connection = None
     resumen_data = []
-    fecha_ayer_str = (datetime.now() - timedelta(days=1)).strftime('%d/%m/%Y')
+    fecha_ayer_str = to_frontend_str(datetime.now() - timedelta(days=1))
 
     try:
         connection = connect_to_db()

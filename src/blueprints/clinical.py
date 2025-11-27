@@ -23,7 +23,7 @@ from werkzeug.utils import secure_filename
 from forms import AntecedentesForm,AnamnesisForm
 # Importar funciones de base de datos necesarias para ESTAS rutas
 from database import (
-    connect_to_db, get_patient_by_id, 
+    connect_to_db, get_patient_by_id, get_active_plans_for_patient,
     get_antecedentes_summary, get_specific_antecedente,
     get_specific_antecedente_by_date, save_antecedentes, 
     get_specific_anamnesis, save_anamnesis, get_anamnesis_summary,
@@ -44,6 +44,7 @@ from database import (
     update_postura_ortho_notes, analizar_adicionales_plan, get_historial_compras_paciente,
     mark_notes_as_seen,add_general_note, get_latest_postura_on_or_before_date
 )
+from utils.date_manager import to_frontend_str, to_db_str, calculate_age, parse_date
 
 # Importar los decoradores
 from decorators import login_required#, admin_required
@@ -785,7 +786,7 @@ def manage_antecedentes(patient_id):
         # Objeto 'date' para comparaciones lógicas
         today_date_obj = date.today()  
         # String 'dd/mm/YYYY' para la UI y para ENVIAR a la base de datos
-        today_str = today_date_obj.strftime('%d/%m/%Y') 
+        today_str = to_frontend_str(today_date_obj)
 
         # --- Instanciar el Formulario ---
         form = AntecedentesForm()
@@ -827,7 +828,7 @@ def manage_antecedentes(patient_id):
                     
                     # Si el admin edita y la fecha original existe, la usamos
                     if is_admin and fecha_original_registro_obj:
-                         fecha_para_guardar_str = fecha_original_registro_obj.strftime('%d/%m/%Y')
+                         fecha_para_guardar_str = to_frontend_str(fecha_original_registro_obj)
                     # Si no es admin, la fecha se actualizará a 'today_str'
                     
                 else:
@@ -893,10 +894,9 @@ def manage_antecedentes(patient_id):
                 flash('Error al guardar los antecedentes.', 'danger')
                 
                 fecha_cargada_obj_error = today_date_obj
-                try:
-                    fecha_cargada_obj_error = datetime.strptime(fecha_para_guardar_str, '%d/%m/%Y').date()
-                except ValueError:
-                    pass 
+                val_date = parse_date(fecha_para_guardar_str)
+                if val_date:
+                    fecha_cargada_obj_error = val_date
 
                 return render_template('antecedentes_form.html',
                                        patient=patient,
@@ -1021,7 +1021,7 @@ def manage_anamnesis(patient_id):
             return redirect(url_for('main')) 
         
         is_admin = session.get('is_admin', False)
-        today_str = datetime.now().strftime('%d/%m/%Y')
+        today_str = to_frontend_str(date.today())
         today_date_obj = date.today()
 
         form = AnamnesisForm()
@@ -1046,17 +1046,14 @@ def manage_anamnesis(patient_id):
                     # --- CORRECCIÓN DE FECHA ---
                     fecha_original_registro_obj = record_original.get('fecha') # Ya es un objeto 'date'
                     if not isinstance(fecha_original_registro_obj, date):
-                         try:
-                             fecha_original_registro_obj = datetime.strptime(str(fecha_original_registro_obj), '%d/%m/%Y').date()
-                         except (ValueError, TypeError):
-                             fecha_original_registro_obj = None
+                         fecha_original_registro_obj = parse_date(str(fecha_original_registro_obj))
                     # --- FIN CORRECCIÓN ---
 
                     if is_admin or fecha_original_registro_obj == today_date_obj:
                         is_editable_post = True
                     
                     if is_admin and fecha_original_registro_obj:
-                         fecha_para_guardar_str = fecha_original_registro_obj.strftime('%d/%m/%Y')
+                         fecha_para_guardar_str = to_frontend_str(fecha_original_registro_obj)
                     
                 else:
                     flash("Error: No se encontró el registro original a actualizar.", "danger")
@@ -1116,7 +1113,7 @@ def manage_anamnesis(patient_id):
             all_records_info = get_anamnesis_summary(connection, patient_id)
             selected_diagrama_puntos = data.get('diagrama', '0,').split(',')
             try:
-                fecha_cargada_obj_error = datetime.strptime(fecha_para_guardar_str, '%d/%m/%Y').date()
+                fecha_cargada_obj_error = parse_date(fecha_para_guardar_str) or today_date_obj
             except (ValueError, TypeError):
                 fecha_cargada_obj_error = today_date_obj
             
@@ -1162,7 +1159,7 @@ def manage_anamnesis(patient_id):
                 selected_diagrama_puntos = request.form.get('diagrama_puntos', '0,').split(',')
                 
                 try:
-                    fecha_cargada_obj = datetime.strptime(fecha_cargada_str, '%d/%m/%Y').date()
+                    fecha_cargada_obj = parse_date(fecha_cargada_str) or today_date_obj
                 except (ValueError, TypeError):
                     fecha_cargada_obj = today_date_obj
                 
@@ -1269,7 +1266,7 @@ def manage_pruebas(patient_id):
 
         # 3. Datos comunes
         is_admin = session.get('is_admin', False)
-        today_str = datetime.now().strftime('%d/%m/%Y')
+        today_str = to_frontend_str(date.today())
         id_dr_actual = session.get('id_dr')
         if not id_dr_actual:
              flash("Error de sesión.", "danger"); return redirect(url_for('auth.login'))
@@ -1936,7 +1933,7 @@ def manage_seguimiento(patient_id):
     except Exception as e:
         print(f"Error general en manage_seguimiento (PID {patient_id}): {e}")
         flash('Ocurrió un error inesperado al gestionar el seguimiento.', 'danger')
-        safe_redirect_url = url_for('patient_detail', patient_id=patient_id) if 'patient_id' in locals() and patient_id is not None else url_for('main')
+        safe_redirect_url = url_for('patient.patient_detail', patient_id=patient_id) if 'patient_id' in locals() and patient_id is not None else url_for('main')
         return redirect(safe_redirect_url)
     finally:
         if connection and connection.is_connected():
@@ -2460,7 +2457,7 @@ def manage_plan_cuidado(patient_id):
     except Exception as e:
         print(f"Error general en manage_plan_cuidado (PID {patient_id}): {e}")
         flash('Ocurrió un error inesperado al gestionar el Plan de Cuidado.', 'danger')
-        safe_redirect_url = url_for('patient_detail', patient_id=patient_id) if 'patient_id' in locals() else url_for('main')
+        safe_redirect_url = url_for('patient.patient_detail', patient_id=patient_id) if 'patient_id' in locals() else url_for('main')
         return redirect(safe_redirect_url)
     finally:
         if connection and connection.is_connected():

@@ -4,6 +4,8 @@ __pycache__/
 venv/
 venv_py311/
 .DS_Store
+.tmp.driveupload/
+.tmp.drivedownload/
 
 # --- Seguridad y Secretos (¡CRÍTICO!) ---
 .env

@@ -3,6 +3,7 @@ import mysql.connector
 from mysql.connector import Error, IntegrityError
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date
+from utils.date_manager import to_db_str, to_frontend_str, calculate_age, parse_date
 import os
 from dotenv import load_dotenv
 from datetime import timedelta
@@ -38,12 +39,6 @@ def connect_to_db():
         print(f"Error while connecting to MySQL: {e}")
         return None
     return None # Asegurar que siempre devuelva algo
-
-def hash_password(password):
-    """Hashes the password."""
-    # Usar un método más moderno si es posible, pero sha256 es común
-    return generate_password_hash(password, method='pbkdf2:sha256')
-
 def add_user(connection, nombre, usuario, password_plain, centro):
     """
     Añade un nuevo doctor/usuario a la tabla 'dr'.
@@ -177,6 +172,11 @@ def get_patient_by_id(connection, patient_id):
         cursor = connection.cursor(dictionary=True, buffered=True)
         cursor.execute(query, (patient_id,))
         patient_data = cursor.fetchone()
+        
+        # Convertir fechas para el frontend
+        if patient_data and patient_data.get('nacimiento'):
+            patient_data['nacimiento'] = to_frontend_str(patient_data['nacimiento'])
+            
         return patient_data
     except Error as e:
         print(f"Error buscando paciente por ID: {e}")
@@ -282,21 +282,25 @@ def get_specific_antecedente_by_date(connection, patient_id, fecha_str):
     """Obtiene los datos y el ID del antecedente para un paciente en una fecha específica."""
     cursor = None
     try:
+        fecha_sql = parse_date(fecha_str)
         query = """
             SELECT id_antecedente, id_px, fecha, peso, altura, calzado, condiciones_generales,
                    condicion_diagnosticada, presion_alta, trigliceridos, diabetes, agua, notas
             FROM antecedentes
-            WHERE id_px = %s AND fecha = STR_TO_DATE(%s, '%d/%m/%Y')
+            WHERE id_px = %s AND fecha = %s
             ORDER BY id_antecedente DESC
             LIMIT 1
         """
         cursor = connection.cursor(dictionary=True, buffered=True)
-        cursor.execute(query, (patient_id, fecha_str))
+        cursor.execute(query, (patient_id, fecha_sql))
         antecedente_data = cursor.fetchone()
         if antecedente_data and antecedente_data.get('calzado'):
              try: antecedente_data['calzado'] = float(antecedente_data['calzado'])
              except (TypeError, ValueError): antecedente_data['calzado'] = 0.0
         return antecedente_data
+    except ValueError as ve:
+        print(f"Error de fecha en get_specific_antecedente_by_date: {ve}")
+        return None
     except Error as e:
         print(f"Error obteniendo antecedente específico (px:{patient_id}, fecha:{fecha_str}): {e}")
         return None
@@ -335,13 +339,19 @@ def save_antecedentes(connection, data):
                 # Si la columna es NOT NULL, deberías asegurar que el valor exista antes
                 data[col] = data.get(col) # O data.get(col, '') si son strings, data.get(col, 0) si son números, etc.
 
+        # Parsear fecha
+        try:
+            fecha_sql = parse_date(data.get('fecha'))
+        except ValueError as ve:
+            print(f"Error fatal (save_antecedentes): {ve}")
+            return False
 
         if id_to_update:
             # --- UPDATE ---
             set_parts = [
-                "`fecha`=STR_TO_DATE(%s, '%d/%m/%Y')" 
+                "`fecha`=%s" 
             ]
-            values_list = [data.get('fecha')] # Empezamos la lista de valores con la fecha
+            values_list = [fecha_sql] # Empezamos la lista de valores con la fecha
 
             for col in data_columns:
                 set_parts.append(f"`{col}`=%s")
@@ -361,17 +371,17 @@ def save_antecedentes(connection, data):
             # Columnas para INSERT (id_px + las data_columns + fecha)
             insert_columns = ['id_px', 'fecha'] + data_columns
             column_names = ", ".join([f"`{col}`" for col in insert_columns])
-            placeholders = "%s, STR_TO_DATE(%s, '%d/%m/%Y'), " + ", ".join(['%s'] * len(data_columns))
+            placeholders = "%s, %s, " + ", ".join(['%s'] * len(data_columns))
             
             query = f"INSERT INTO antecedentes ({column_names}) VALUES ({placeholders})"
             
-            values_list = [data['id_px'], data.get('fecha')] # id_px y fecha primero
+            values_list = [data['id_px'], fecha_sql] # id_px y fecha primero
             for col in data_columns:
                 values_list.append(data.get(col))
             
             values = tuple(values_list)
 
-            print(f"Insertando nuevos antecedentes para ID_PX: {data.get('id_px')} en Fecha: {data.get('fecha')}")
+            print(f"Insertando nuevos antecedentes para ID_PX: {data.get('id_px')} en Fecha: {fecha_sql}")
             cursor.execute(query, values)
             saved_id = cursor.lastrowid
 
@@ -442,20 +452,24 @@ def get_specific_anamnesis_by_date(connection, patient_id, fecha_str):
     """Obtiene los datos y el ID del registro de anamnesis para un paciente en una fecha específica."""
     cursor = None
     try:
+        fecha_sql = parse_date(fecha_str)
         # Selecciona todas las columnas EXCEPTO diagrama, lesión, historia
         query = """
             SELECT id_anamnesis, id_px, fecha, condicion1, calif1, condicion2, calif2,
                    condicion3, calif3, como_comenzo, primera_vez, alivia, empeora,
                    como_ocurrio, actividades_afectadas, dolor_intenso, tipo_dolor, diagrama, historia 
             FROM anamnesis
-            WHERE id_px = %s AND fecha = STR_TO_DATE(%s, '%d/%m/%Y')
+            WHERE id_px = %s AND fecha = %s
             ORDER BY id_anamnesis DESC
             LIMIT 1
         """
         cursor = connection.cursor(dictionary=True, buffered=True)
-        cursor.execute(query, (patient_id, fecha_str))
+        cursor.execute(query, (patient_id, fecha_sql))
         anamnesis_data = cursor.fetchone()
         return anamnesis_data # Devuelve diccionario con id_anamnesis o None
+    except ValueError as ve:
+        print(f"Error de fecha en get_specific_anamnesis_by_date: {ve}")
+        return None
     except Error as e:
         print(f"Error obteniendo anamnesis específica por fecha (px:{patient_id}, fecha:{fecha_str}): {e}")
         return None
@@ -485,12 +499,19 @@ def save_anamnesis(connection, data):
         cursor = connection.cursor()
         id_to_update = data.get('id_anamnesis')
 
+        # Parsear fecha
+        try:
+            fecha_sql = parse_date(data.get('fecha'))
+        except ValueError as ve:
+            print(f"Error fatal (save_anamnesis): {ve}")
+            return False
+
         if id_to_update:
             # UPDATE
             set_parts = [
-                "`fecha`=STR_TO_DATE(%s, '%d/%m/%Y')"  
+                "`fecha`=%s"  
             ]
-            values_list = [data.get('fecha')] 
+            values_list = [fecha_sql] 
 
             for col in data_columns:
                 set_parts.append(f"`{col}`=%s")
@@ -505,15 +526,15 @@ def save_anamnesis(connection, data):
             # INSERT
             insert_columns = ['id_px', 'fecha'] + data_columns
             column_names = ", ".join([f"`{col}`" for col in insert_columns])
-            placeholders = "%s, STR_TO_DATE(%s, '%d/%m/%Y'), " + ", ".join(['%s'] * len(data_columns)) # <-- CAMBIO
+            placeholders = "%s, %s, " + ", ".join(['%s'] * len(data_columns))
             
             query = f"INSERT INTO anamnesis ({column_names}) VALUES ({placeholders})"
             
-            values_list = [data['id_px'], data.get('fecha')] # id_px y fecha primero
+            values_list = [data['id_px'], fecha_sql] # id_px y fecha primero
             for col in data_columns:
                 values_list.append(data.get(col))
             values = tuple(values_list)
-            print(f"Insertando nueva anamnesis (con historia) para ID_PX: {data.get('id_px')} en Fecha: {data.get('fecha')}")
+            print(f"Insertando nueva anamnesis (con historia) para ID_PX: {data.get('id_px')} en Fecha: {fecha_sql}")
 
         cursor.execute(query, values)
         connection.commit()
@@ -633,12 +654,9 @@ def get_specific_postura_by_date(connection, patient_id, fecha_str):
     """
     cursor = None
     try:
-        # 1. Convertir la fecha dd/mm/yyyy a YYYY-MM-DD
-        fecha_obj = datetime.strptime(fecha_str, '%d/%m/%Y')
-        fecha_sql_str = fecha_obj.strftime('%Y-%m-%d')
-    except (ValueError, TypeError):
-        # Si la fecha_str es inválida (ej. None o formato incorrecto), no se encontrará nada
-        print(f"Error (get_specific_postura_by_date): Formato de fecha inválido '{fecha_str}'.")
+        fecha_sql_str = parse_date(fecha_str)
+    except ValueError as e:
+        print(f"Error (get_specific_postura_by_date): {e}")
         return None
     
     try:
@@ -732,15 +750,9 @@ def save_postura(connection, data):
             
             # 2. La convertimos a 'YYYY-MM-DD' usando Python
             try:
-                if fecha_str_ddmmyyyy:
-                    fecha_obj = datetime.strptime(fecha_str_ddmmyyyy, '%d/%m/%Y')
-                    fecha_str_yyyymmdd = fecha_obj.strftime('%Y-%m-%d')
-                else:
-                    # Si la fecha que llegó era None, lanzamos el error nosotros mismos
-                    raise ValueError("La fecha (fecha) no puede ser nula.")
-            except (ValueError, TypeError) as e:
-                # Si la fecha tiene un formato inválido (ej. "hola") o es nula, fallará aquí.
-                print(f"Error fatal: La fecha '{fecha_str_ddmmyyyy}' es inválida o nula. {e}")
+                fecha_str_yyyymmdd = to_db_str(fecha_str_ddmmyyyy)
+            except ValueError as e:
+                print(f"Error fatal (save_postura): {e}")
                 raise Error(f"La fecha '{fecha_str_ddmmyyyy}' tiene un formato inválido.")
 
             # 3. Separamos 'fecha' del resto de columnas
@@ -851,17 +863,26 @@ def get_specific_revaloracion(connection, id_revaloracion):
     """
     cursor = None
     try:
-        # Seleccionar TODAS las columnas, incluyendo las nuevas de imagen
+        # Seleccionar TODAS las columnas, incluyendo las nuevas de imagen (aliased desde postura)
         query = """
-            SELECT id_revaloracion, id_px, id_dr, fecha, id_anamnesis_inicial,
-                   id_postura_asociado,  -- <-- AÑADIDO
-                   calif1_actual, calif2_actual, calif3_actual,
-                   mejora_subjetiva_pct,
-                   notas_adicionales_reval,
-                   diagrama_actual,
-                   fecha_registro
-            FROM revaloraciones
-            WHERE id_revaloracion = %s
+            SELECT r.id_revaloracion, r.id_px, r.id_dr, r.fecha, r.id_anamnesis_inicial,
+                   r.id_postura_asociado,
+                   r.calif1_actual, r.calif2_actual, r.calif3_actual,
+                   r.mejora_subjetiva_pct,
+                   r.notas_adicionales_reval,
+                   r.diagrama_actual,
+                   r.fecha_registro,
+                   -- Columnas de imagen desde postura (aliased para compatibilidad)
+                   p.frente AS frente_path,
+                   p.lado AS lado1_path,
+                   p.postura_extra AS lado2_path,
+                   p.pies AS pies_path,
+                   p.termografia AS termografia_path,
+                   p.pies_frontal AS pies_frontal_path,
+                   p.pies_trasera AS pies_trasera_path
+            FROM revaloraciones r
+            LEFT JOIN postura p ON r.id_postura_asociado = p.id_postura
+            WHERE r.id_revaloracion = %s
         """
         cursor = connection.cursor(dictionary=True, buffered=True)
         cursor.execute(query, (id_revaloracion,))
@@ -882,12 +903,9 @@ def get_specific_revaloracion_by_date(connection, patient_id, fecha_str):
     
     # --- !! INICIO DE LA CORRECCIÓN !! ---
     try:
-        # 1. Convertir la fecha dd/mm/yyyy a YYYY-MM-DD
-        fecha_obj = datetime.strptime(fecha_str, '%d/%m/%Y')
-        fecha_sql_str = fecha_obj.strftime('%Y-%m-%d')
-    except (ValueError, TypeError):
-        # Si la fecha_str es inválida (ej. None o formato incorrecto), no se encontrará nada
-        print(f"Error (get_specific_revaloracion_by_date): Formato de fecha inválido '{fecha_str}'.")
+        fecha_sql_str = parse_date(fecha_str)
+    except ValueError as e:
+        print(f"Error (get_specific_revaloracion_by_date): {e}")
         return None
     # --- !! FIN DE LA CORRECCIÓN !! ---
 
@@ -954,13 +972,9 @@ def save_revaloracion(connection, data):
         fecha_sql_str = None
         
         try:
-            if fecha_str_ddmmyyyy:
-                fecha_obj = datetime.strptime(fecha_str_ddmmyyyy, '%d/%m/%Y')
-                fecha_sql_str = fecha_obj.strftime('%Y-%m-%d') # Convertir a 'YYYY-MM-DD'
-            else:
-                raise ValueError("La fecha (fecha) no puede ser nula.")
-        except (ValueError, TypeError) as e:
-            print(f"Error fatal (save_revaloracion): La fecha '{fecha_str_ddmmyyyy}' es inválida. {e}")
+            fecha_sql_str = parse_date(fecha_str_ddmmyyyy)
+        except ValueError as e:
+            print(f"Error fatal (save_revaloracion): {e}")
             raise Error(f"La fecha '{fecha_str_ddmmyyyy}' tiene un formato inválido.")
         
         # --- !! FIN DE LA CORRECCIÓN DE FECHA !! ---
@@ -1068,17 +1082,24 @@ def get_latest_revaloracion_overall(connection, patient_id):
     cursor = None
     try:
         query = """
-            SELECT id_revaloracion, id_px, id_dr, fecha, id_anamnesis_inicial,
-                   calif1_actual, calif2_actual, calif3_actual,
-                   mejora_subjetiva_pct, -- Se mantiene
-                   notas_adicionales_reval, -- <-- AÑADIDA
-                   diagrama_actual,
-                   frente_path, lado1_path, lado2_path, pies_path, termografia_path,
-                   pies_frontal_path, pies_trasera_path,
-                   fecha_registro
-            FROM revaloraciones
-            WHERE id_px = %s
-            ORDER BY fecha DESC, id_revaloracion DESC
+            SELECT r.id_revaloracion, r.id_px, r.id_dr, r.fecha, r.id_anamnesis_inicial,
+                   r.calif1_actual, r.calif2_actual, r.calif3_actual,
+                   r.mejora_subjetiva_pct,
+                   r.notas_adicionales_reval,
+                   r.diagrama_actual,
+                   r.fecha_registro,
+                   -- Columnas de imagen desde postura (aliased)
+                   p.frente AS frente_path,
+                   p.lado AS lado1_path,
+                   p.postura_extra AS lado2_path,
+                   p.pies AS pies_path,
+                   p.termografia AS termografia_path,
+                   p.pies_frontal AS pies_frontal_path,
+                   p.pies_trasera AS pies_trasera_path
+            FROM revaloraciones r
+            LEFT JOIN postura p ON r.id_postura_asociado = p.id_postura
+            WHERE r.id_px = %s
+            ORDER BY r.fecha DESC, r.id_revaloracion DESC
             LIMIT 1
         """
         cursor = connection.cursor(dictionary=True, buffered=True)
@@ -1097,14 +1118,13 @@ def get_clinical_dates_with_types(connection, patient_id):
     Obtiene una lista de diccionarios, cada uno con una fecha y booleanos
     indicando qué tipos de registros clínicos existen para esa fecha,
     ordenada por fecha ascendente.
-    *** CORREGIDO: Usa alias explícitos para EXISTS ***
     """
     cursor = None
     dates_info = {}
     try:
         cursor = connection.cursor(dictionary=True, buffered=True)
 
-        # 1. Obtener todas las fechas distintas (sin cambios)
+        # 1. Obtener todas las fechas distintas
         all_dates = set()
         tables_to_check = ['antecedentes', 'anamnesis', 'postura', 'revaloraciones']
         for table in tables_to_check:
@@ -1112,13 +1132,16 @@ def get_clinical_dates_with_types(connection, patient_id):
             cursor.execute(query_dates, (patient_id,))
             for row in cursor.fetchall():
                  if row and row.get('fecha'):
-                    try:
-                        datetime.strptime(row['fecha'], '%d/%m/%Y')
-                        all_dates.add(row['fecha'])
-                    except (ValueError, TypeError):
-                         print(f"WARN: Formato de fecha inválido omitido: {row['fecha']}")
+                    date_val = row['fecha']
+                    formatted_date = None
+                    
+                    if isinstance(date_val, (date, datetime, str)):
+                        formatted_date = to_frontend_str(date_val)
+                    
+                    if formatted_date:
+                        all_dates.add(formatted_date)
 
-        # 2. Para cada fecha, verificar registros usando ALIAS explícitos
+        # 2. Para cada fecha, verificar registros
         for fecha_str in all_dates:
             info = {
                 'fecha': fecha_str,
@@ -1127,28 +1150,34 @@ def get_clinical_dates_with_types(connection, patient_id):
                 'has_postura': False,
                 'has_revaloracion': False
             }
+            
+            # Convertir fecha_str (dd/mm/yyyy) a SQL (YYYY-MM-DD) para la consulta
+            fecha_sql = to_db_str(fecha_str)
+            if not fecha_sql:
+                continue
+
             # Usar "AS flag" para asegurar el nombre de la clave
             query_check = "SELECT EXISTS(SELECT 1 FROM {table} WHERE id_px = %s AND fecha = %s LIMIT 1) AS flag"
             try:
-                 cursor.execute(query_check.format(table='antecedentes'), (patient_id, fecha_str))
-                 info['has_antecedentes'] = bool(cursor.fetchone().get('flag', 0)) # Usar 'flag'
+                 cursor.execute(query_check.format(table='antecedentes'), (patient_id, fecha_sql))
+                 info['has_antecedentes'] = bool(cursor.fetchone().get('flag', 0))
 
-                 cursor.execute(query_check.format(table='anamnesis'), (patient_id, fecha_str))
-                 info['has_anamnesis'] = bool(cursor.fetchone().get('flag', 0)) # Usar 'flag'
+                 cursor.execute(query_check.format(table='anamnesis'), (patient_id, fecha_sql))
+                 info['has_anamnesis'] = bool(cursor.fetchone().get('flag', 0))
 
-                 cursor.execute(query_check.format(table='postura'), (patient_id, fecha_str))
-                 info['has_postura'] = bool(cursor.fetchone().get('flag', 0)) # Usar 'flag'
+                 cursor.execute(query_check.format(table='postura'), (patient_id, fecha_sql))
+                 info['has_postura'] = bool(cursor.fetchone().get('flag', 0))
 
-                 cursor.execute(query_check.format(table='revaloraciones'), (patient_id, fecha_str))
-                 info['has_revaloracion'] = bool(cursor.fetchone().get('flag', 0)) # Usar 'flag'
+                 cursor.execute(query_check.format(table='revaloraciones'), (patient_id, fecha_sql))
+                 info['has_revaloracion'] = bool(cursor.fetchone().get('flag', 0))
 
                  dates_info[fecha_str] = info
             except Error as check_err:
                  print(f"WARN: Error verificando registros para fecha {fecha_str}: {check_err}")
 
-        # 3. Convertir y ordenar (sin cambios)
+        # 3. Convertir y ordenar
         if not dates_info: return []
-        sorted_list = sorted(dates_info.values(), key=lambda item: datetime.strptime(item['fecha'], '%d/%m/%Y'))
+        sorted_list = sorted(dates_info.values(), key=lambda item: to_db_str(item['fecha']))
         return sorted_list
 
     except Error as e:
@@ -1196,7 +1225,7 @@ def get_latest_anamnesis_on_or_before_date(connection, patient_id, target_date_s
     """
     cursor = None
     try:
-        target_date_obj = datetime.strptime(target_date_str, '%d/%m/%Y')
+        target_date_db = to_db_str(target_date_str)
         query = """
             SELECT id_anamnesis, id_px, fecha, condicion1, calif1, condicion2, calif2,
                    condicion3, calif3, como_comenzo, primera_vez, alivia, empeora,
@@ -1208,7 +1237,7 @@ def get_latest_anamnesis_on_or_before_date(connection, patient_id, target_date_s
             LIMIT 1
         """
         cursor = connection.cursor(dictionary=True, buffered=True)
-        cursor.execute(query, (patient_id, target_date_obj.strftime('%Y-%m-%d')))
+        cursor.execute(query, (patient_id, target_date_db))
         data = cursor.fetchone()
         return data
     except ValueError:
@@ -1317,11 +1346,9 @@ def get_specific_seguimiento_by_date(connection, patient_id, fecha_str):
     """
     cursor = None
     try:
-        # 1. Convertir la fecha dd/mm/yyyy a YYYY-MM-DD
-        fecha_obj = datetime.strptime(fecha_str, '%d/%m/%Y')
-        fecha_sql_str = fecha_obj.strftime('%Y-%m-%d')
-    except (ValueError, TypeError):
-        print(f"Error (get_specific_seguimiento_by_date): Formato de fecha inválido '{fecha_str}'.")
+        fecha_sql_str = parse_date(fecha_str)
+    except ValueError as e:
+        print(f"Error (get_specific_seguimiento_by_date): {e}")
         return None
     try:
         # --- CAMBIO: JOIN con la tabla 'dr' ---
@@ -1377,17 +1404,11 @@ def save_seguimiento(connection, data):
     ]
 
     try:
-        fecha_str_ddmmyyyy = data.get('fecha')
-        fecha_sql_str = None
         try:
-            if fecha_str_ddmmyyyy:
-                fecha_obj = datetime.strptime(fecha_str_ddmmyyyy, '%d/%m/%Y')
-                fecha_sql_str = fecha_obj.strftime('%Y-%m-%d') # Convertir a 'YYYY-MM-DD'
-            else:
-                raise ValueError("La fecha (fecha) no puede ser nula.")
-        except (ValueError, TypeError) as e:
-            print(f"Error fatal (save_seguimiento): La fecha '{fecha_str_ddmmyyyy}' es inválida. {e}")
-            raise Error(f"La fecha '{fecha_str_ddmmyyyy}' tiene un formato inválido.")
+            fecha_sql_str = parse_date(data.get('fecha'))
+        except ValueError as e:
+            print(f"Error fatal (save_seguimiento): {e}")
+            raise Error(f"La fecha '{data.get('fecha')}' tiene un formato inválido.")
 
         cursor = connection.cursor()
         id_to_update = data.get('id_seguimiento')
@@ -1662,11 +1683,9 @@ def get_specific_plan_cuidado_by_date(connection, patient_id, fecha_str):
     """Obtiene el plan de cuidado más reciente para un paciente en una fecha específica."""
     cursor = None
     try:
-        # 1. Convertir la fecha dd/mm/yyyy a YYYY-MM-DD
-        fecha_obj = datetime.strptime(fecha_str, '%d/%m/%Y')
-        fecha_sql_str = fecha_obj.strftime('%Y-%m-%d')
-    except (ValueError, TypeError):
-        print(f"Error (get_specific_plan_cuidado_by_date): Formato de fecha inválido '{fecha_str}'.")
+        fecha_sql_str = parse_date(fecha_str)
+    except ValueError as e:
+        print(f"Error (get_specific_plan_cuidado_by_date): {e}")
         return None
     try:
         # Seleccionar TODAS las columnas
@@ -1717,17 +1736,11 @@ def save_plan_cuidado(connection, data):
     ]
 
     try:
-        fecha_str_ddmmyyyy = data.get('fecha')
-        fecha_sql_str = None
         try:
-            if fecha_str_ddmmyyyy:
-                fecha_obj = datetime.strptime(fecha_str_ddmmyyyy, '%d/%m/%Y')
-                fecha_sql_str = fecha_obj.strftime('%Y-%m-%d') # Convertir a 'YYYY-MM-DD'
-            else:
-                raise ValueError("La fecha (fecha) no puede ser nula.")
-        except (ValueError, TypeError) as e:
-            print(f"Error fatal (save_plan_cuidado): La fecha '{fecha_str_ddmmyyyy}' es inválida. {e}")
-            raise Error(f"La fecha '{fecha_str_ddmmyyyy}' tiene un formato inválido.")
+            fecha_sql_str = parse_date(data.get('fecha'))
+        except ValueError as e:
+            print(f"Error fatal (save_plan_cuidado): {e}")
+            raise Error(f"La fecha '{data.get('fecha')}' tiene un formato inválido.")
         
         cursor = connection.cursor()
         id_to_update = data.get('id_plan')
@@ -2010,17 +2023,20 @@ def save_recibo(connection, datos_recibo, detalles_recibo):
          return None
 
     try:
-        fecha_str_ddmmyyyy = datos_recibo.get('fecha')
-        fecha_sql_str = None
         try:
-            if fecha_str_ddmmyyyy:
-                fecha_obj = datetime.strptime(fecha_str_ddmmyyyy, '%d/%m/%Y')
-                fecha_sql_str = fecha_obj.strftime('%Y-%m-%d') # Convertir a 'YYYY-MM-DD'
+            fecha_obj = parse_date(datos_recibo.get('fecha'))
+            if not fecha_obj:
+                 raise ValueError("Fecha vacía o inválida")
+            
+            # Asegurar explícitamente que sea un string YYYY-MM-DD
+            if isinstance(fecha_obj, (date, datetime)):
+                fecha_sql_str = fecha_obj.strftime('%Y-%m-%d')
             else:
-                raise ValueError("La fecha (fecha) no puede ser nula.")
-        except (ValueError, TypeError) as e:
-            print(f"Error fatal (save_recibo): La fecha '{fecha_str_ddmmyyyy}' es inválida. {e}")
-            raise Error(f"La fecha '{fecha_str_ddmmyyyy}' tiene un formato inválido.")
+                fecha_sql_str = str(fecha_obj) # Fallback por si acaso
+
+        except ValueError as e:
+            print(f"Error fatal (save_recibo): {e}")
+            raise Error(f"La fecha '{datos_recibo.get('fecha')}' tiene un formato inválido.")
         
         cursor = connection.cursor()
 
@@ -3160,6 +3176,9 @@ def get_pacientes_mas_frecuentes(connection, fecha_inicio_str, fecha_fin_str, li
     """
     cursor = None
     try:
+        fecha_inicio_db = to_db_str(fecha_inicio_str)
+        fecha_fin_db = to_db_str(fecha_fin_str)
+        
         query = """
             SELECT 
                 dp.id_px,
@@ -3176,9 +3195,9 @@ def get_pacientes_mas_frecuentes(connection, fecha_inicio_str, fecha_fin_str, li
         """
         cursor = connection.cursor(dictionary=True)
         print(f"Query Reporte Pacientes Frecuentes: {query}")
-        print(f"Params: {fecha_inicio_str}, {fecha_fin_str}, {limit}")
+        print(f"Params: {fecha_inicio_db}, {fecha_fin_db}, {limit}")
         
-        cursor.execute(query, (fecha_inicio_str, fecha_fin_str, limit))
+        cursor.execute(query, (fecha_inicio_db, fecha_fin_db, limit))
         resultados = cursor.fetchall()
         
         return resultados
@@ -3341,7 +3360,7 @@ def get_historial_compras_paciente(connection, id_px):
             JOIN recibos r ON rd.id_recibo = r.id_recibo
             LEFT JOIN productos_servicios ps ON rd.id_prod = ps.id_prod
             WHERE r.id_px = %s
-            ORDER BY STR_TO_DATE(r.fecha, '%d/%m/%Y') DESC, r.id_recibo DESC, rd.id_detalle ASC;
+            ORDER BY r.fecha DESC, r.id_recibo DESC, rd.id_detalle ASC;
         """
         cursor = connection.cursor(dictionary=True)
         cursor.execute(query, (id_px,))
@@ -3382,7 +3401,7 @@ def get_planes_cuidado_paciente(connection, id_px):
             FROM plancuidado pc
             LEFT JOIN dr ON pc.id_dr = dr.id_dr
             WHERE pc.id_px = %s
-            ORDER BY STR_TO_DATE(pc.fecha, '%d/%m/%Y') DESC, pc.id_plan DESC;
+            ORDER BY pc.fecha DESC, pc.id_plan DESC;
         """
         cursor = connection.cursor(dictionary=True)
         cursor.execute(query, (id_px,))
@@ -3445,7 +3464,7 @@ def get_plan_cuidado_activo_para_paciente(connection, id_px): # Nueva función a
             ) q_count ON pc.id_plan = q_count.id_plan_cuidado_asociado
             WHERE pc.id_px = %s 
             AND (q_count.seguimientos_realizados IS NULL OR q_count.seguimientos_realizados < pc.visitas_qp)
-            ORDER BY STR_TO_DATE(pc.fecha, '%d/%m/%Y') DESC, pc.id_plan DESC
+            ORDER BY pc.fecha DESC, pc.id_plan DESC
             LIMIT 1;
         """
         # Si tienes un campo 'esta_activo' en tu tabla 'plancuidado', la condición WHERE sería más simple:
@@ -3546,7 +3565,7 @@ def get_recibos_by_patient(connection, patient_id):
             FROM recibos r
             LEFT JOIN dr d ON r.id_dr = d.id_dr
             WHERE r.id_px = %s
-            ORDER BY STR_TO_DATE(r.fecha, '%d/%m/%Y') DESC, r.id_recibo DESC;
+            ORDER BY r.fecha DESC, r.id_recibo DESC;
         """
         # Nota: GROUP_CONCAT puede tener un límite de longitud por defecto.
         # Si tienes muchos ítems por recibo, podrías necesitar ajustarlo en MySQL
@@ -3709,9 +3728,7 @@ def get_patients_by_recent_followup(connection, limit=10):
         # Convertir el objeto date a string dd/mm/YYYY para la vista
         if patients:
             for p in patients:
-                fecha_obj = p.get('fecha_ultimo_seguimiento')
-                if isinstance(fecha_obj, date):
-                    p['fecha_ultimo_seguimiento'] = fecha_obj.strftime('%d/%m/%Y')
+                p['fecha_ultimo_seguimiento'] = to_frontend_str(p.get('fecha_ultimo_seguimiento'))
         
         return patients if patients else []
     except Error as e:
@@ -3737,40 +3754,28 @@ def get_resumen_dia_anterior(connection):
 
         cursor = connection.cursor(dictionary=True)
         
-        # --- INICIO LÓGICA DE BÚSQUEDA ---
-        today = datetime.now()
-        dias_a_restar = 1
+        # --- INICIO LÓGICA DE BÚSQUEDA (OPTIMIZADA) ---
+        print("DEBUG: Buscando última fecha con registros en los últimos 30 días...")
+        
+        # Consulta optimizada: Obtener la fecha máxima en el rango de los últimos 30 días
+        query_ultima_fecha = """
+            SELECT MAX(fecha) as ultima_fecha 
+            FROM quiropractico 
+            WHERE fecha >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+        """
+        cursor.execute(query_ultima_fecha)
+        result = cursor.fetchone()
+        
         fecha_encontrada_str = None
-
-        print(f"DEBUG: Fecha de hoy: {today}")
-
-        while dias_a_restar <= 30: 
-            fecha_a_evaluar_dt = today - timedelta(days=dias_a_restar)
-            fecha_a_evaluar_str = fecha_a_evaluar_dt.strftime('%d/%m/%Y')
-            
-            # Imprimimos qué fecha estamos buscando
-            print(f"DEBUG: Buscando registros para la fecha: {fecha_a_evaluar_str} (Iteración {dias_a_restar})")
-            
-            # Consulta con STR_TO_DATE (Probamos con un solo % primero, si falla probaremos doble)
-            sql_check_fecha = "SELECT 1 FROM quiropractico WHERE fecha = STR_TO_DATE(%s, '%d/%m/%Y') LIMIT 1;"
-            
-            # DEBUG: Imprimir la consulta que se va a ejecutar
-            # (Nota: No podemos ver la query final con los valores inyectados fácilmente, pero vemos la estructura)
-            # print(f"DEBUG SQL Check: {sql_check_fecha} con valor {fecha_a_evaluar_str}")
-
-            cursor.execute(sql_check_fecha, (fecha_a_evaluar_str,))
-            found = cursor.fetchone()
-            
-            if found: 
-                print(f"DEBUG: ¡ENCONTRADO! Hay datos en la fecha {fecha_a_evaluar_str}")
-                fecha_encontrada_str = fecha_a_evaluar_str
-                break 
+        if result and result.get('ultima_fecha'):
+            # Asegurar formato YYYY-MM-DD
+            fecha_obj = result['ultima_fecha']
+            if isinstance(fecha_obj, str):
+                fecha_encontrada_str = fecha_obj
             else:
-                print(f"DEBUG: No se encontraron datos en {fecha_a_evaluar_str}")
-            
-            dias_a_restar += 1
-            
-        if not fecha_encontrada_str:
+                fecha_encontrada_str = fecha_obj.strftime('%Y-%m-%d')
+            print(f"DEBUG: ¡ENCONTRADO! Última fecha con datos: {fecha_encontrada_str}")
+        else:
             print("ADVERTENCIA: No se encontraron seguimientos en los últimos 30 días.")
             return [] 
 
@@ -3780,7 +3785,7 @@ def get_resumen_dia_anterior(connection):
         sql_pacientes_ayer = """
             SELECT DISTINCT id_px
             FROM quiropractico
-            WHERE fecha = STR_TO_DATE(%s, '%d/%m/%Y')
+            WHERE fecha = %s
             ORDER BY id_px; 
         """
         cursor.execute(sql_pacientes_ayer, (fecha_encontrada_str,))
@@ -3926,31 +3931,41 @@ def get_first_postura_on_or_after_date(connection, patient_id, target_date_str):
     tabla_posturas = "postura"
     try:
         cursor = connection.cursor(dictionary=True)
-        # 1. Intenta buscar en o después de la fecha, ordenando por la más cercana (ASC)
+        
+        # Convertir fecha objetivo a YYYY-MM-DD
+        try:
+            target_date_sql = parse_date(target_date_str)
+        except ValueError:
+             # Si falla (ej. ya viene en YYYY-MM-DD o es inválida), intentamos usarla tal cual o logueamos
+             # Asumimos que viene en dd/mm/yyyy como dice el docstring
+             print(f"WARN: Fecha inválida en get_first_postura_on_or_after_date: {target_date_str}")
+             return None
+
+        # 1. Intenta buscar en o después de la fecha
         sql_after = f"""
             SELECT *
             FROM {tabla_posturas}
-            WHERE id_px = %s AND fecha >= STR_TO_DATE(%s, '%d/%m/%Y')
+            WHERE id_px = %s AND fecha >= %s
             ORDER BY fecha ASC, id_postura ASC
             LIMIT 1;
         """
-        cursor.execute(sql_after, (patient_id, target_date_str))
+        cursor.execute(sql_after, (patient_id, target_date_sql))
         result = cursor.fetchone()
 
-        # 2. Fallback: Si no encontró nada después, busca la más reciente ANTES
+        # 2. Fallback
         if not result:
-            print(f"INFO (get_first_postura_on_or_after_date): No se encontró postura en o después de {target_date_str}. Buscando la más reciente antes.")
+            print(f"INFO: No se encontró postura en o después de {target_date_str}. Buscando antes.")
             sql_before = f"""
                 SELECT *
                 FROM {tabla_posturas}
-                WHERE id_px = %s AND fecha < STR_TO_DATE(%s, '%d/%m/%Y')
+                WHERE id_px = %s AND fecha < %s
                 ORDER BY fecha DESC, id_postura DESC
                 LIMIT 1;
             """
-            cursor.execute(sql_before, (patient_id, target_date_str))
+            cursor.execute(sql_before, (patient_id, target_date_sql))
             result = cursor.fetchone()
 
-        return result # Devuelve el resultado encontrado (o None si no hay ninguno)
+        return result
     except Error as e:
         print(f"Error en get_first_postura_on_or_after_date: {e}")
         return None
@@ -4237,3 +4252,32 @@ def add_general_note(connection, id_px, notas_text):
         if cursor:
             cursor.close()
 
+def get_latest_postura_on_or_before_date(connection, patient_id, target_date_str):
+    """
+    Encuentra el registro de postura más reciente para un paciente
+    en o antes de una fecha específica (formato dd/mm/yyyy).
+    """
+    cursor = None
+    tabla_posturas = "postura" 
+    try:
+        target_date_sql = parse_date(target_date_str)
+        cursor = connection.cursor(dictionary=True)
+        sql = f"""
+            SELECT *
+            FROM {tabla_posturas}
+            WHERE id_px = %s AND fecha <= %s
+            ORDER BY fecha DESC, id_postura DESC
+            LIMIT 1;
+        """
+        cursor.execute(sql, (patient_id, target_date_sql))
+        result = cursor.fetchone()
+        return result
+    except ValueError:
+        print(f"Error fecha inválida en get_latest_postura_on_or_before_date: {target_date_str}")
+        return None
+    except Error as e:
+        print(f"Error en get_latest_postura_on_or_before_date: {e}")
+        return None
+    finally:
+        if cursor:
+            cursor.close()

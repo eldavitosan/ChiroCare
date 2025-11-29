@@ -1,0 +1,4 @@
+ALTER TABLE dr 
+ADD COLUMN config_redireccion_seguimiento INT DEFAULT 1;
+-- 1: Ir al Menú Principal(Default)
+-- 2: Ir a Detalles del Paciente

@@ -2,9 +2,12 @@ import os
 from flask import (
     Blueprint, render_template, request, redirect, jsonify, session, flash, url_for
 )
-from database import verify_login, connect_to_db 
+from db.auth import verify_login,get_doctor_profile, update_doctor_preferences
+from db.connection import connect_to_db 
 from mysql.connector import Error
 from forms import LoginForm
+from decorators import login_required
+from flask_wtf.csrf import generate_csrf
 
 # 1. Crear el Blueprint
 # El 'template_folder' apunta dos niveles arriba (de 'src/blueprints/' a 'templates/')
@@ -86,3 +89,33 @@ def logout():
 
     flash('Has cerrado sesión exitosamente.', 'info')
     return redirect(url_for('auth.login')) # 'auth.login' es esta nueva ruta
+
+@auth_bp.route('/perfil', methods=['GET', 'POST'])
+@login_required
+def perfil():
+    connection = connect_to_db()
+    if not connection:
+        flash('Error de conexión', 'danger')
+        return redirect(url_for('main'))
+    
+    id_dr = session.get('id_dr')
+
+    if request.method == 'POST':
+        # Obtenemos el valor del formulario (será '0', '1' o '2')
+        nueva_config = request.form.get('redireccion_select')
+        
+        if nueva_config and nueva_config.isdigit():
+            exito = update_doctor_preferences(connection, id_dr, int(nueva_config))
+            if exito:
+                flash('Preferencias actualizadas correctamente.', 'success')
+            else:
+                flash('Error al guardar preferencias.', 'danger')
+        
+        # Recargamos la misma página para ver los cambios
+        return redirect(url_for('auth.perfil'))
+
+    # Método GET: Mostrar el formulario con los datos actuales
+    doctor_data = get_doctor_profile(connection, id_dr)
+    connection.close()
+    token = generate_csrf()
+    return render_template('perfil.html', doctor=doctor_data, csrf_token=token)

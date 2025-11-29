@@ -1,9 +1,34 @@
 import os
-#import google.generativeai as genai
-#from groq import Groq
-#from openai import OpenAI
-#from dateutil.relativedelta import relativedelta
-#import time
+import time
+from db.connection import connect_to_db
+from db.clinical import (
+    get_specific_anamnesis, save_anamnesis, get_anamnesis_summary,
+    get_specific_anamnesis_by_date, get_postura_summary, get_specific_postura_by_date,
+    save_postura, get_radiografias_for_postura, insert_radiografia,
+    get_latest_anamnesis, get_seguimiento_summary, get_specific_seguimiento,
+    get_specific_seguimiento_by_date, save_seguimiento, get_latest_postura_overall,
+    get_latest_radiografias_overall, get_revaloraciones_linked_to_anamnesis,
+    get_seguimientos_for_plan, get_first_postura_on_or_after_date,
+    update_postura_ortho_notes, get_latest_postura_on_or_before_date,
+    get_antecedentes_summary, get_specific_antecedente,
+    get_specific_antecedente_by_date, save_antecedentes,
+    get_revaloraciones_summary, get_specific_revaloracion, get_specific_revaloracion_by_date,
+    save_revaloracion, get_latest_antecedente_on_or_before_date 
+)
+from db.patients import (
+    get_patient_by_id, mark_notes_as_seen, add_general_note
+)
+from db.finance import (
+    get_active_plans_for_patient, get_terapias_fisicas, get_plan_cuidado_summary,
+    get_specific_plan_cuidado, get_specific_plan_cuidado_by_date, save_plan_cuidado,
+    get_productos_servicios_by_type, get_productos_by_ids, get_productos_servicios_venta,
+    save_recibo, get_specific_recibo, get_plan_cuidado_activo_para_paciente,
+    get_recibo_detalles_by_id, get_recibos_by_patient, get_recibo_by_id,
+    get_active_plan_status, analizar_adicionales_plan, get_historial_compras_paciente
+)
+from db.auth import (
+    get_all_doctors, get_centro_by_id
+)
 from datetime import datetime, timedelta, date
 import uuid
 import base64
@@ -22,28 +47,8 @@ from werkzeug.utils import secure_filename
 
 from forms import AntecedentesForm,AnamnesisForm
 # Importar funciones de base de datos necesarias para ESTAS rutas
-from database import (
-    connect_to_db, get_patient_by_id, 
-    get_antecedentes_summary, get_specific_antecedente,
-    get_specific_antecedente_by_date, save_antecedentes, 
-    get_specific_anamnesis, save_anamnesis, get_anamnesis_summary,
-    get_specific_anamnesis_by_date, get_postura_summary, get_specific_postura_by_date, 
-    save_postura, get_radiografias_for_postura, insert_radiografia,
-    get_revaloraciones_summary, get_specific_revaloracion, get_specific_revaloracion_by_date, 
-    save_revaloracion, get_latest_anamnesis, get_seguimiento_summary, get_specific_seguimiento,
-    get_specific_seguimiento_by_date, save_seguimiento, get_terapias_fisicas,
-    get_latest_postura_overall, get_latest_radiografias_overall, 
-    get_revaloraciones_linked_to_anamnesis, get_plan_cuidado_summary, get_specific_plan_cuidado,
-    get_specific_plan_cuidado_by_date, save_plan_cuidado, get_productos_servicios_by_type,
-    get_productos_by_ids, get_latest_antecedente_on_or_before_date, 
-    get_productos_servicios_venta, save_recibo, get_specific_recibo, 
-    get_active_plans_for_patient,get_seguimientos_for_plan,
-    get_recibo_detalles_by_id, get_all_doctors, #get_resumen_dia_anterior,
-    get_recibos_by_patient, get_recibo_by_id, get_centro_by_id,
-    get_first_postura_on_or_after_date, get_active_plan_status,
-    update_postura_ortho_notes, analizar_adicionales_plan, get_historial_compras_paciente,
-    mark_notes_as_seen,add_general_note
-)
+
+from utils.date_manager import to_frontend_str, to_db_str, calculate_age, parse_date
 
 # Importar los decoradores
 from decorators import login_required#, admin_required
@@ -785,7 +790,7 @@ def manage_antecedentes(patient_id):
         # Objeto 'date' para comparaciones lógicas
         today_date_obj = date.today()  
         # String 'dd/mm/YYYY' para la UI y para ENVIAR a la base de datos
-        today_str = today_date_obj.strftime('%d/%m/%Y') 
+        today_str = to_frontend_str(today_date_obj)
 
         # --- Instanciar el Formulario ---
         form = AntecedentesForm()
@@ -827,7 +832,7 @@ def manage_antecedentes(patient_id):
                     
                     # Si el admin edita y la fecha original existe, la usamos
                     if is_admin and fecha_original_registro_obj:
-                         fecha_para_guardar_str = fecha_original_registro_obj.strftime('%d/%m/%Y')
+                         fecha_para_guardar_str = to_frontend_str(fecha_original_registro_obj)
                     # Si no es admin, la fecha se actualizará a 'today_str'
                     
                 else:
@@ -893,10 +898,9 @@ def manage_antecedentes(patient_id):
                 flash('Error al guardar los antecedentes.', 'danger')
                 
                 fecha_cargada_obj_error = today_date_obj
-                try:
-                    fecha_cargada_obj_error = datetime.strptime(fecha_para_guardar_str, '%d/%m/%Y').date()
-                except ValueError:
-                    pass 
+                val_date = parse_date(fecha_para_guardar_str)
+                if val_date:
+                    fecha_cargada_obj_error = val_date
 
                 return render_template('antecedentes_form.html',
                                        patient=patient,
@@ -1021,7 +1025,7 @@ def manage_anamnesis(patient_id):
             return redirect(url_for('main')) 
         
         is_admin = session.get('is_admin', False)
-        today_str = datetime.now().strftime('%d/%m/%Y')
+        today_str = to_frontend_str(date.today())
         today_date_obj = date.today()
 
         form = AnamnesisForm()
@@ -1046,17 +1050,14 @@ def manage_anamnesis(patient_id):
                     # --- CORRECCIÓN DE FECHA ---
                     fecha_original_registro_obj = record_original.get('fecha') # Ya es un objeto 'date'
                     if not isinstance(fecha_original_registro_obj, date):
-                         try:
-                             fecha_original_registro_obj = datetime.strptime(str(fecha_original_registro_obj), '%d/%m/%Y').date()
-                         except (ValueError, TypeError):
-                             fecha_original_registro_obj = None
+                         fecha_original_registro_obj = parse_date(str(fecha_original_registro_obj))
                     # --- FIN CORRECCIÓN ---
 
                     if is_admin or fecha_original_registro_obj == today_date_obj:
                         is_editable_post = True
                     
                     if is_admin and fecha_original_registro_obj:
-                         fecha_para_guardar_str = fecha_original_registro_obj.strftime('%d/%m/%Y')
+                         fecha_para_guardar_str = to_frontend_str(fecha_original_registro_obj)
                     
                 else:
                     flash("Error: No se encontró el registro original a actualizar.", "danger")
@@ -1116,7 +1117,7 @@ def manage_anamnesis(patient_id):
             all_records_info = get_anamnesis_summary(connection, patient_id)
             selected_diagrama_puntos = data.get('diagrama', '0,').split(',')
             try:
-                fecha_cargada_obj_error = datetime.strptime(fecha_para_guardar_str, '%d/%m/%Y').date()
+                fecha_cargada_obj_error = parse_date(fecha_para_guardar_str) or today_date_obj
             except (ValueError, TypeError):
                 fecha_cargada_obj_error = today_date_obj
             
@@ -1162,7 +1163,7 @@ def manage_anamnesis(patient_id):
                 selected_diagrama_puntos = request.form.get('diagrama_puntos', '0,').split(',')
                 
                 try:
-                    fecha_cargada_obj = datetime.strptime(fecha_cargada_str, '%d/%m/%Y').date()
+                    fecha_cargada_obj = parse_date(fecha_cargada_str) or today_date_obj
                 except (ValueError, TypeError):
                     fecha_cargada_obj = today_date_obj
                 
@@ -1269,7 +1270,7 @@ def manage_pruebas(patient_id):
 
         # 3. Datos comunes
         is_admin = session.get('is_admin', False)
-        today_str = datetime.now().strftime('%d/%m/%Y')
+        today_str = to_frontend_str(date.today())
         id_dr_actual = session.get('id_dr')
         if not id_dr_actual:
              flash("Error de sesión.", "danger"); return redirect(url_for('auth.login'))
@@ -1636,37 +1637,30 @@ def manage_seguimiento(patient_id):
             id_seguimiento_editado = int(id_seguimiento_editado_str) if id_seguimiento_editado_str else None
             fecha_guardada = request.form.get('fecha_cargada', today_str)
             
-            id_dr_para_guardar = id_dr_actual_sesion # Asignar por defecto el doctor logueado
+            id_dr_para_guardar = id_dr_actual_sesion 
 
-            # --- INICIO: AÑADIR LÓGICA DE TRANSACCIÓN ---
+            # --- INICIO: LÓGICA DE TRANSACCIÓN ---
             try:
                 connection.autocommit = False 
-                print("INFO (Seguimiento POST): Autocommit deshabilitado. Iniciando transacción.")
 
                 if id_seguimiento_editado:
                     record_original = get_specific_seguimiento(connection, id_seguimiento_editado)
-                    if not (record_original and record_original.get('id_px') == patient_id and record_original.get('fecha') == fecha_guardada):
-                         raise ValueError("Error: El registro de seguimiento a editar no existe o no coincide.")
-                    if is_admin and record_original.get('id_dr'): # Si admin edita, mantener el dr original del registro
+                    
+                    # Validación simplificada: Solo verificamos que el ID pertenezca al paciente
+                    if not (record_original and record_original.get('id_px') == patient_id):
+                         raise ValueError("Error: El registro de seguimiento a editar no existe o no coincide con el paciente.")
+                    
+                    if is_admin and record_original.get('id_dr'): 
                         id_dr_para_guardar = record_original.get('id_dr')
-                elif not (fecha_guardada == today_str): # Creando en fecha pasada (solo admin)
+
+                elif not (fecha_guardada == today_str): 
                     record_original = get_specific_seguimiento_by_date(connection, patient_id, fecha_guardada)
-                    if record_original: # Ya existe uno para esa fecha, se intentará actualizar (admin)
+                    if record_original: 
                         id_seguimiento_editado = record_original.get('id_seguimiento')
-                        if record_original.get('id_dr'): # Mantener dr original si admin edita uno existente de fecha pasada
+                        if record_original.get('id_dr'): 
                              id_dr_para_guardar = record_original.get('id_dr')
                 
                 existing_data = record_original if record_original else {}
-
-                es_fecha_de_hoy = (fecha_guardada == today_str)
-                puede_editar_todo = is_admin or es_fecha_de_hoy
-                
-                accion_permitida = puede_editar_todo or (not puede_editar_todo and record_original) # Permite añadir a existente si no es hoy/admin
-
-                if not accion_permitida:
-                     if not is_admin and not es_fecha_de_hoy and not record_original: # No admin, no hoy, y no hay registro = no puede crear
-                         raise PermissionError("No tiene permiso para crear seguimientos para fechas pasadas.")
-                     raise PermissionError("Acción no permitida para este registro.")
 
                 data_to_save = {
                     'id_px': patient_id,
@@ -1679,48 +1673,31 @@ def manage_seguimiento(patient_id):
                 id_plan_asociado_str = request.form.get('id_plan_cuidado_asociado')
                 data_to_save['id_plan_cuidado_asociado'] = int(id_plan_asociado_str) if id_plan_asociado_str and id_plan_asociado_str.isdigit() else None
                 
+                # --- CORRECCIÓN 1: SEGMENTOS ---
+                # Guardamos DIRECTAMENTE lo que viene del formulario
                 segmentos = [
                     'occipital', 'atlas', 'axis', 'c3', 'c4', 'c5', 'c6', 'c7',
                     't1', 't2', 't3', 't4', 't5', 't6', 't7', 't8', 't9', 't10', 't11', 't12',
                     'l1', 'l2', 'l3', 'l4', 'l5', 'sacro', 'coxis', 'iliaco_d', 'iliaco_i', 'pubis'
                 ]
                 for seg in segmentos:
-                    form_value = request.form.get(seg, '').strip()
-                    original_value = existing_data.get(seg)
-                    if puede_editar_todo or (not original_value and form_value):
-                        data_to_save[seg] = form_value
-                    elif record_original: # Si no puede editar y había valor, mantener original
-                        data_to_save[seg] = original_value
-                    else: # Si no puede editar y no había original (creando en pasado admin), el valor del form se usa
-                        data_to_save[seg] = form_value
+                    # Usamos el valor del form. Si no viene nada, cadena vacía.
+                    data_to_save[seg] = request.form.get(seg, '').strip()
 
+                # --- CORRECCIÓN 2: NOTAS ---
+                # Forzamos guardar lo que el usuario escribió en el formulario
+                data_to_save['notas'] = request.form.get('notas', '').strip()
 
-                form_notas = request.form.get('notas', '').strip()
-                original_notas = existing_data.get('notas')
-                if puede_editar_todo or (not original_notas and form_notas):
-                    data_to_save['notas'] = form_notas
-                elif record_original:
-                    data_to_save['notas'] = original_notas
-                else:
-                    data_to_save['notas'] = form_notas
-
-
+                # --- CORRECCIÓN 3: TERAPIAS ---
                 selected_therapy_ids = request.form.getlist('terapia_chk')
                 valid_therapy_ids = [tid for tid in selected_therapy_ids if tid.isdigit()]
                 terapia_string_form = '0,' + ','.join(sorted(valid_therapy_ids))
                 if terapia_string_form == '0,': terapia_string_form = '0,'
-                original_terapia = existing_data.get('terapia', '0,')
-
-                if puede_editar_todo or (original_terapia == '0,' and terapia_string_form != '0,'):
-                     data_to_save['terapia'] = terapia_string_form
-                elif record_original:
-                     data_to_save['terapia'] = original_terapia
-                else:
-                     data_to_save['terapia'] = terapia_string_form
-
+                
+                data_to_save['terapia'] = terapia_string_form
 
                 # 1. Guardar el seguimiento
-                saved_id_seguimiento = save_seguimiento(connection, data_to_save) # Esta función NO debe hacer commit
+                saved_id_seguimiento = save_seguimiento(connection, data_to_save) 
                 if not saved_id_seguimiento:
                     raise Exception("Error al guardar el seguimiento principal.")
 
@@ -1729,21 +1706,30 @@ def manage_seguimiento(patient_id):
                 id_postura_para_actualizar_str = request.form.get('id_postura_hoy')
                 id_postura_para_actualizar = int(id_postura_para_actualizar_str) if id_postura_para_actualizar_str and id_postura_para_actualizar_str.isdigit() else None
 
-                # Solo actualizamos si el campo de notas fue enviado Y el ID de postura es válido
-                if notas_orto_form is not None and id_postura_para_actualizar and puede_editar_todo:
-                    print(f"INFO (Seguimiento POST): Actualizando notas ortopédicas para id_postura {id_postura_para_actualizar}...")
+                # Quitamos la restricción estricta aquí también para permitir actualizar la nota
+                if notas_orto_form is not None and id_postura_para_actualizar:
                     success_notas = update_postura_ortho_notes(connection, id_postura_para_actualizar, notas_orto_form.strip())
                     if not success_notas:
-                        # Si falla, lanzamos error para revertir el guardado del seguimiento
                         raise Exception("Error al guardar las notas ortopédicas.")
 
                 # 3. Si todo salió bien, hacer commit
                 connection.commit()
-                print("INFO (Seguimiento POST): Transacción completada (Commit).")
+                
                 flash('Seguimiento guardado exitosamente.', 'success')
-                return redirect(url_for('clinical.manage_seguimiento', patient_id=patient_id, selected_id=saved_id_seguimiento))
-            
 
+                # --- Lógica Dinámica ---
+                from db.auth import get_doctor_profile # Asegúrate de importar esto arriba
+                
+                perfil_dr = get_doctor_profile(connection, id_dr_actual_sesion)
+                preferencia = perfil_dr.get('config_redireccion_seguimiento', 0) if perfil_dr else 0
+
+                if preferencia == 1:
+                    return redirect(url_for('main'))
+                elif preferencia == 2:
+                    return redirect(url_for('patient.patient_detail', patient_id=patient_id))
+                else:
+                    return redirect(url_for('clinical.manage_seguimiento', patient_id=patient_id, selected_id=saved_id_seguimiento))
+            
             except (PermissionError, ValueError, Exception) as e:
                  print(f"Error POST manage_seguimiento (PID {patient_id}): {e}")
                  connection.rollback()
@@ -1766,8 +1752,6 @@ def manage_seguimiento(patient_id):
                  if id_seguimiento_editado:
                     current_data_for_reload['id_seguimiento'] = id_seguimiento_editado
                  
-                 # Si record_original se definió (porque era una edición o un intento de crear en pasado),
-                 # lo usamos para mantener consistencia en la info mostrada.
                  if record_original:
                      current_data_for_reload['nombre_doctor_seguimiento'] = record_original.get('nombre_doctor_seguimiento', nombre_dr_actual_sesion)
                      for key_orig, val_orig in record_original.items():
@@ -1779,20 +1763,19 @@ def manage_seguimiento(patient_id):
                  latest_anamnesis_rerender = get_latest_anamnesis(connection, patient_id) or {}
                  latest_postura_rerender = get_latest_postura_overall(connection, patient_id) or {}
                  latest_rx_list_rerender = get_latest_radiografias_overall(connection, patient_id, limit=4)
-                 _is_editable_post_rerender = is_admin or (fecha_guardada == today_str)
+                 _is_editable_post_rerender = True # Forzamos editable al rerenderizar si falló
                  linked_plan_id_rerender_str = request.form.get('id_plan_cuidado_asociado')
                  linked_plan_id_rerender = int(linked_plan_id_rerender_str) if linked_plan_id_rerender_str and linked_plan_id_rerender_str.isdigit() else None
 
                  postura_data_hoy_rerender = get_specific_postura_by_date(connection, patient_id, today_str)
                  show_ortho_rerender = False
-                 notes_ortho_rerender = request.form.get('notas_pruebas_ortoneuro', '') # Usar el valor del form que falló
+                 notes_ortho_rerender = request.form.get('notas_pruebas_ortoneuro', '') 
                  id_postura_rerender = request.form.get('id_postura_hoy')
 
-                 if postura_data_hoy_rerender or id_postura_rerender: # Mostrar el campo si existía
+                 if postura_data_hoy_rerender or id_postura_rerender: 
                     show_ortho_rerender = True
-                    if not id_postura_rerender: # Obtener el ID si no vino del form (error antes)
+                    if not id_postura_rerender: 
                         id_postura_rerender = postura_data_hoy_rerender.get('id_postura') if postura_data_hoy_rerender else None
-                    # Si las notas del form están vacías, pero existían, rellenar con las existentes
                     if not notes_ortho_rerender and postura_data_hoy_rerender:
                         notes_ortho_rerender = postura_data_hoy_rerender.get('notas_pruebas_ortoneuro', '')
 
@@ -1810,21 +1793,17 @@ def manage_seguimiento(patient_id):
                                          latest_rx_list=latest_rx_list_rerender,
                                          active_plans_list=active_plans_list,
                                          id_plan_asociado_seleccionado=linked_plan_id_rerender,
-                                         nombre_doctor_sesion = current_data_for_reload.get('nombre_doctor_seguimiento', nombre_dr_actual_sesion,
+                                         nombre_doctor_sesion = current_data_for_reload.get('nombre_doctor_seguimiento', nombre_dr_actual_sesion),
                                          show_ortho_notes_field=show_ortho_rerender,
-                                        ortho_notes_today=notes_ortho_rerender, 
-                                        id_postura_hoy_para_form=id_postura_rerender)
-                                        )
+                                         ortho_notes_today=notes_ortho_rerender, 
+                                         id_postura_hoy_para_form=id_postura_rerender
+                                         )
             finally:
-                # Al final, restaurar autocommit a True
                 if connection:
                     connection.autocommit = True
-                    print("INFO (Seguimiento POST): Autocommit restaurado a True.")
-            # --- FIN: LÓGICA DE TRANSACCIÓN ---
                 
         else: # Método GET
-            # 1. Asegúrate de tener el OBJETO 'date' de hoy
-            today_date_obj = date.today() # (Asegúrate de tener 'from datetime import date')
+            today_date_obj = datetime.now().date()
             
             selected_id_str = request.args.get('selected_id')
             force_today_view = (selected_id_str == "")
@@ -1836,10 +1815,7 @@ def manage_seguimiento(patient_id):
             all_records_info = get_seguimiento_summary(connection, patient_id)
             current_data = None
             id_seguimiento_a_cargar = None
-            
-            # 2. Renombra la variable para que sea claro que es un OBJETO
             fecha_cargada_obj = None 
-            
             id_plan_asociado_a_cargar = None
             nombre_doctor_del_registro = nombre_dr_actual_sesion 
 
@@ -1851,7 +1827,7 @@ def manage_seguimiento(patient_id):
                     force_today_view = True
                 else:
                     id_seguimiento_a_cargar = selected_id
-                    fecha_cargada_obj = current_data.get('fecha') # <-- 3. Asigna el OBJETO
+                    fecha_cargada_obj = current_data.get('fecha') 
                     id_plan_asociado_a_cargar = current_data.get('id_plan_cuidado_asociado')
                     nombre_doctor_del_registro = current_data.get('nombre_doctor_seguimiento', nombre_dr_actual_sesion)
 
@@ -1868,26 +1844,23 @@ def manage_seguimiento(patient_id):
                           id_seguimiento_a_cargar = None
                           if active_plans_list:
                               id_plan_asociado_a_cargar = active_plans_list[0]['id_plan']
-                      fecha_cargada_obj = today_date_obj # <-- 4. Asigna el OBJETO de hoy
+                      fecha_cargada_obj = today_date_obj
                  else:
                       current_data_today = get_specific_seguimiento_by_date(connection, patient_id, today_str)
                       if current_data_today:
                           current_data = current_data_today
                           id_seguimiento_a_cargar = current_data.get('id_seguimiento')
-                          fecha_cargada_obj = today_date_obj # <-- 4. Asigna el OBJETO de hoy
+                          fecha_cargada_obj = today_date_obj
                           id_plan_asociado_a_cargar = current_data.get('id_plan_cuidado_asociado')
                           nombre_doctor_del_registro = current_data.get('nombre_doctor_seguimiento', nombre_dr_actual_sesion)
                       else: 
                           current_data = {}
                           id_seguimiento_a_cargar = None
-                          fecha_cargada_obj = today_date_obj # <-- 4. Asigna el OBJETO de hoy
+                          fecha_cargada_obj = today_date_obj 
                           if active_plans_list:
                               id_plan_asociado_a_cargar = active_plans_list[0]['id_plan']
             
-            # 5. La comprobación clave: Compara Objeto vs Objeto
             is_editable = is_admin or (fecha_cargada_obj == today_date_obj)
-            
-            # --- !! FIN DE LA CORRECCIÓN !! ---
             
             available_therapies = get_terapias_fisicas(connection)
             terapia_string = current_data.get('terapia', '0,') if current_data else '0,'
@@ -1904,8 +1877,7 @@ def manage_seguimiento(patient_id):
             id_postura_hoy_para_form = None
             postura_data_hoy = None
 
-            # Buscamos si existe un registro de 'postura' para hoy
-            if fecha_cargada_obj == today_date_obj: # <-- 6. Compara con el OBJETO
+            if fecha_cargada_obj == today_date_obj:
                 postura_data_hoy = get_specific_postura_by_date(connection, patient_id, today_str)
 
             if postura_data_hoy:
@@ -1917,7 +1889,7 @@ def manage_seguimiento(patient_id):
                                    patient=patient,
                                    all_records_info=all_records_info,
                                    current_data=current_data,
-                                   is_editable=is_editable, # <-- Esta variable ahora será 'True'
+                                   is_editable=is_editable, 
                                    loaded_id_seguimiento=id_seguimiento_a_cargar,
                                    today_str=today_str,
                                    available_therapies=available_therapies,
@@ -1936,11 +1908,12 @@ def manage_seguimiento(patient_id):
     except Exception as e:
         print(f"Error general en manage_seguimiento (PID {patient_id}): {e}")
         flash('Ocurrió un error inesperado al gestionar el seguimiento.', 'danger')
-        safe_redirect_url = url_for('patient_detail', patient_id=patient_id) if 'patient_id' in locals() and patient_id is not None else url_for('main')
+        safe_redirect_url = url_for('patient.patient_detail', patient_id=patient_id) if 'patient_id' in locals() and patient_id is not None else url_for('main')
         return redirect(safe_redirect_url)
     finally:
         if connection and connection.is_connected():
             connection.close()
+
 
 @clinical_bp.route('/revaloracion', methods=['GET', 'POST'])
 @login_required
@@ -2210,7 +2183,7 @@ def manage_revaloracion(patient_id):
 def manage_plan_cuidado(patient_id):
     connection = None
     try:
-        # 1. Conectar (asumiendo autocommit=True) y obtener datos básicos
+        # 1. Conectar
         connection = connect_to_db()
         if not connection: 
             flash('Error conectando a la base de datos.', 'danger'); 
@@ -2222,7 +2195,6 @@ def manage_plan_cuidado(patient_id):
              if connection and connection.is_connected(): connection.close()
              return redirect(url_for('main'))
 
-
         # 3. Datos comunes
         is_admin = session.get('is_admin', False)
         today_str = datetime.now().strftime('%d/%m/%Y')
@@ -2233,16 +2205,14 @@ def manage_plan_cuidado(patient_id):
             flash("Error de sesión.", "danger"); 
             return redirect(url_for('auth.login'))
         
-        # --- Lógica para obtener la lista de doctores ---
+        # --- Lógica para obtener doctores ---
         centro_para_filtrar_doctores = None
-        if not is_admin: # Si NO es admin, filtrar por su centro
+        if not is_admin: 
             centro_para_filtrar_doctores = id_centro_dr_logueado
 
-        # Se piden solo doctores activos para el dropdown de selección
         doctors_list = get_all_doctors(connection, 
                                        include_inactive=False, 
                                        filter_by_centro_id=centro_para_filtrar_doctores)
-        # --- Fin lógica para obtener doctores ---
 
         adicionales_list = get_productos_servicios_by_type(connection, tipo_adicional=1)
         costo_qp_db = 0.0
@@ -2265,31 +2235,23 @@ def manage_plan_cuidado(patient_id):
             form_data = { k: request.form.get(k) for k in request.form }
             form_adicionales_ids = request.form.getlist('adicionales_chk')
 
-            # --- Bloque Try/Except para operaciones DB ---
             try:
                 is_editable_post = False
                 record_original = None
-                fecha_original_db_str = None # <--- 1. Variable para el string de fecha
+                fecha_original_db_str = None 
 
                 if id_plan_editado:
                     record_original = get_specific_plan_cuidado(connection, id_plan_editado)
-                    
-                    # --- !! INICIO DE LA CORRECCIÓN !! ---
-                    
-                    # 2. Convertir la fecha de la BD (si existe) a string
                     fecha_original_db_obj = record_original.get('fecha') if record_original else None
-                    if isinstance(fecha_original_db_obj, date): # 'date' debe estar importado de 'datetime'
+                    
+                    if fecha_original_db_obj and hasattr(fecha_original_db_obj, 'strftime'):
                         fecha_original_db_str = fecha_original_db_obj.strftime('%d/%m/%Y')
-
-                    # 3. Comparar string vs string (para la validación del ID)
+                    
                     if not (record_original and record_original.get('id_px') == patient_id and fecha_original_db_str == fecha_guardada):
-                         print(f"DEBUG PLAN FAIL: ID/PX Coinciden: {record_original.get('id_px') == patient_id}, Fecha DB: '{fecha_original_db_str}' != Fecha Form: '{fecha_guardada}'")
                          raise ValueError("Plan de cuidado a editar inválido.")
                     
-                    # 4. Usar el string para la comprobación de 'is_editable'
                     if is_admin or (fecha_original_db_str == today_str):
                          is_editable_post = True
-                    # --- !! FIN DE LA CORRECCIÓN !! ---
                 else: 
                      if fecha_guardada == today_str: is_editable_post = True
                      else: is_editable_post = is_admin
@@ -2297,7 +2259,7 @@ def manage_plan_cuidado(patient_id):
                 if not is_editable_post:
                     raise PermissionError('No tiene permiso para modificar/crear planes para esta fecha.')
 
-                # Preparar 'data_to_save'
+                # Preparar datos
                 data_to_save = {
                     'id_px': patient_id,
                     'id_plan': id_plan_editado,
@@ -2309,7 +2271,8 @@ def manage_plan_cuidado(patient_id):
                     'visitas_qp': 0, 'visitas_tf': 0, 'promocion_pct': 0,
                     'inversion_total': 0.0, 'ahorro_calculado': 0.0
                 }
-                # Calcular Inversión/Ahorro
+                
+                # Cálculos
                 inversion_total_neta = 0.0; ahorro_calculado = 0.0
                 try:
                     visitas_qp = int(form_data.get('visitas_qp') or 0)
@@ -2323,121 +2286,79 @@ def manage_plan_cuidado(patient_id):
                     inversion_total_neta = inversion_bruta - ahorro_calculado
                 except ValueError:
                     raise ValueError("Visitas y promoción deben ser números enteros.")
-                except Exception as calc_err:
-                     print(f"Error calculando inversión POST: {calc_err}")
-                     flash("Hubo un problema al calcular la inversión, se guardaron valores en 0.", "warning")
 
                 data_to_save['inversion_total'] = round(inversion_total_neta, 2)
                 data_to_save['ahorro_calculado'] = round(ahorro_calculado, 2)
 
-                # Adicionales
                 valid_adicionales_ids = [aid for aid in form_adicionales_ids if aid.isdigit()]
                 adicionales_string = '0,' + ','.join(sorted(valid_adicionales_ids))
                 if adicionales_string == '0,': adicionales_string = '0,'
                 data_to_save['adicionales_ids'] = adicionales_string
 
-                # Llamar a la función de guardado (esperando autocommit)
                 saved_id = save_plan_cuidado(connection, data_to_save)
-                if not saved_id:
-                    # Si falló, autocommit no ocurrió o hubo error de BD
-                    raise Exception("Error al guardar el Plan de Cuidado.")
+                if not saved_id: raise Exception("Error al guardar en BD.")
 
                 flash('Plan de Cuidado guardado exitosamente.', 'success')
                 return redirect(url_for('clinical.manage_plan_cuidado', patient_id=patient_id, selected_id=saved_id))
 
-            # --- Bloque Except para operaciones ---
             except (PermissionError, ValueError, Exception) as e:
-                 print(f"ERROR: Ocurrió un error en Plan Cuidado POST: {type(e).__name__} - {e}")
-                 print(f"Error POST manage_plan_cuidado (PID {patient_id}): {e}")
+                 print(f"ERROR POST manage_plan_cuidado: {e}")
                  if isinstance(e, PermissionError): flash(str(e), 'warning')
                  elif isinstance(e, ValueError): flash(f"Error en datos: {e}", 'danger')
-                 else: flash(f'Error interno al guardar: {e}', 'danger')
+                 else: flash(f'Error interno: {e}', 'danger')
+                 return redirect(url_for('clinical.manage_plan_cuidado', patient_id=patient_id))
 
-                 # Re-renderizar formulario (lógica igual, pero sin rollback)
-                 all_records_info_rerender = get_plan_cuidado_summary(connection, patient_id)
-                 current_data_for_reload = { k: request.form.get(k) for k in request.form }
-                 current_data_for_reload['id_px'] = patient_id
-                 current_data_for_reload['adicionales_ids'] = '0,' + ','.join(request.form.getlist('adicionales_chk'))
-                 if current_data_for_reload['adicionales_ids'] == '0,': current_data_for_reload['adicionales_ids'] = '0,'
-                 current_selected_adicionales_rerender = current_data_for_reload['adicionales_ids'].split(',')
-                 linked_doctor_id_rerender = int(request.form.get('id_dr') or id_dr_actual_sesion)
-                 current_data_for_reload['inversion_total'] = current_data_for_reload.get('inversion_total', 0.0)
-                 current_data_for_reload['ahorro_calculado'] = current_data_for_reload.get('ahorro_calculado', 0.0)
-                 try: current_data_for_reload['inversion_total'] = float(current_data_for_reload['inversion_total'])
-                 except: current_data_for_reload['inversion_total'] = 0.0
-                 try: current_data_for_reload['ahorro_calculado'] = float(current_data_for_reload['ahorro_calculado'])
-                 except: current_data_for_reload['ahorro_calculado'] = 0.0
-
-                 _is_editable_post_rerender = is_admin or (fecha_guardada == today_str)
-
-                 return render_template('plan_cuidado_form.html',
-                                        patient=patient, all_records_info=all_records_info_rerender,
-                                        current_data=current_data_for_reload, is_editable=_is_editable_post_rerender,
-                                        loaded_id_plan=id_plan_editado, today_str=today_str,
-                                        adicionales_list=adicionales_list, current_selected_adicionales=current_selected_adicionales_rerender,
-                                        doctors_list=doctors_list, 
-                                        linked_doctor_id=linked_doctor_id_rerender,
-                                        costo_qp_js=costo_qp_db, costo_tf_js=costo_tf_db,
-                                        anamnesis_summary_list=anamnesis_summary_list,
-                                        qp_completadas=0, 
-                                        tf_completadas=0,
-                                        seguimientos_del_plan=[])
-        # --- FIN MÉTODO POST ---
-
-        # --- Lógica GET  ---
+        # --- Lógica GET ---
         else:
-            today_date_obj = date.today()
+            today_date_obj = datetime.now().date()
+            
             selected_id_str = request.args.get('selected_id')
             selected_id = int(selected_id_str) if selected_id_str else None
             all_records_info = get_plan_cuidado_summary(connection, patient_id)
+            
             current_data = None
             id_plan_a_cargar = None
             fecha_cargada_obj = None
             linked_doctor_id = None
-
-            qp_completadas = 0
-            tf_completadas = 0
-            seguimientos_del_plan = []
-            adicionales_status = []
+            qp_completadas = 0; tf_completadas = 0
+            seguimientos_del_plan = []; adicionales_status = []
 
             if selected_id:
                  current_data = get_specific_plan_cuidado(connection, selected_id)
-                 if not (current_data and current_data.get('id_px') == patient_id):
-                     flash("ID plan inválido.", "warning")
-                     current_data = None
-                     selected_id = None
-                 else:
+                 if current_data and current_data.get('id_px') == patient_id:
                      id_plan_a_cargar = selected_id
-                     fecha_cargada_obj = current_data.get('fecha') # <-- 3. Asigna el OBJETO
-                     linked_doctor_id = current_data.get('id_dr') 
-            
+                     fecha_cargada_obj = current_data.get('fecha') 
+                     linked_doctor_id = current_data.get('id_dr')
+                 else:
+                     current_data = None 
+
             if current_data is None:
-                  # get_specific_plan_cuidado_by_date espera un string 'dd/mm/YYYY', lo cual es correcto
                   current_data_today = get_specific_plan_cuidado_by_date(connection, patient_id, today_str)
                   if current_data_today:
                       current_data = current_data_today
                       id_plan_a_cargar = current_data.get('id_plan')
-                      fecha_cargada_obj = current_data.get('fecha') # <-- 3. Asigna el OBJETO
+                      fecha_cargada_obj = current_data.get('fecha') 
                       linked_doctor_id = current_data.get('id_dr')
-                  else: # Es un plan nuevo
+                  else: 
                       current_data = {}
                       id_plan_a_cargar = None
-                      fecha_cargada_obj = today_date_obj # <-- 4. Asigna el OBJETO de hoy
+                      fecha_cargada_obj = today_date_obj 
                       linked_doctor_id = id_dr_actual_sesion 
 
             if id_plan_a_cargar:
-                seguimientos_del_plan_raw = get_seguimientos_for_plan(connection, id_plan_a_cargar)
-                if seguimientos_del_plan_raw:
-                    seguimientos_del_plan = seguimientos_del_plan_raw
-                    qp_completadas = len(seguimientos_del_plan)
-                    for seg in seguimientos_del_plan:
-                        terapias_ids = seg.get('terapia', '0,').strip(',').split(',')
-                        if '0' in terapias_ids: terapias_ids.remove('0')
-                        if terapias_ids: tf_completadas += 1
-
+                seguimientos_del_plan = get_seguimientos_for_plan(connection, id_plan_a_cargar) or []
+                qp_completadas = len(seguimientos_del_plan)
+                for seg in seguimientos_del_plan:
+                    t_ids = seg.get('terapia', '0,').strip(',').split(',')
+                    if any(tid != '0' and tid for tid in t_ids): tf_completadas += 1
                 adicionales_status = analizar_adicionales_plan(connection, id_plan_a_cargar)
             
-            is_editable = is_admin or (fecha_cargada_obj == today_date_obj)
+            is_editable = False
+            if is_admin:
+                is_editable = True
+            elif fecha_cargada_obj == today_date_obj:
+                is_editable = True
+
             adicionales_string = current_data.get('adicionales_ids', '0,') if current_data else '0,'
             current_selected_adicionales = adicionales_string.split(',')
 
@@ -2457,15 +2378,16 @@ def manage_plan_cuidado(patient_id):
                                    seguimientos_del_plan=seguimientos_del_plan,
                                    adicionales_status=adicionales_status
                                    )
+
     except Exception as e:
-        print(f"Error general en manage_plan_cuidado (PID {patient_id}): {e}")
-        flash('Ocurrió un error inesperado al gestionar el Plan de Cuidado.', 'danger')
-        safe_redirect_url = url_for('patient_detail', patient_id=patient_id) if 'patient_id' in locals() else url_for('main')
+        print(f"Error general en manage_plan_cuidado: {e}")
+        flash('Ocurrió un error inesperado.', 'danger')
+        safe_redirect_url = url_for('patient.patient_detail', patient_id=patient_id) if 'patient_id' in locals() else url_for('main')
         return redirect(safe_redirect_url)
     finally:
         if connection and connection.is_connected():
             connection.close()
-            print("INFO: Conexión a BD cerrada en finally (manage_plan_cuidado).")
+
 
 @clinical_bp.route('/recibo', methods=['GET', 'POST'])
 @clinical_bp.route('/recibo/<int:recibo_id>', methods=['GET'])
@@ -3395,29 +3317,7 @@ def generar_reporte_integral_pdf(patient_id):
         if connection and connection.is_connected():
             connection.close()
 
-def get_plan_cuidado_activo_para_paciente(connection, id_px):
-    """
-    Obtiene el plan de cuidado más reciente para un paciente, considerado como el "activo".
-    """
-    cursor = None
-    try:
-        query = """
-            SELECT id_plan, fecha, pb_diagnostico
-            FROM plancuidado
-            WHERE id_px = %s
-            ORDER BY STR_TO_DATE(fecha, '%d/%m/%Y') DESC, id_plan DESC
-            LIMIT 1;
-        """
-        cursor = connection.cursor(dictionary=True, buffered=True)
-        cursor.execute(query, (id_px,))
-        plan = cursor.fetchone()
-        return plan # Devuelve el plan más reciente o None
-    except Error as e:
-        print(f"Error obteniendo plan activo para paciente ID {id_px}: {e}")
-        return None
-    finally:
-        if cursor:
-            cursor.close()
+
 
 @clinical_bp.route('/comparador')
 @login_required
@@ -3539,31 +3439,7 @@ def reporte_visual_fechado(patient_id):
         if connection and connection.is_connected():
             connection.close()
 
-def get_latest_postura_on_or_before_date(connection, patient_id, target_date_str):
-    """
-    Encuentra el registro de postura más reciente para un paciente
-    en o antes de una fecha específica (formato dd/mm/yyyy).
-    """
-    cursor = None
-    tabla_posturas = "postura" 
-    try:
-        cursor = connection.cursor(dictionary=True)
-        sql = f"""
-            SELECT *
-            FROM {tabla_posturas}
-            WHERE id_px = %s AND STR_TO_DATE(fecha, '%d/%m/%Y') <= STR_TO_DATE(%s, '%d/%m/%Y')
-            ORDER BY STR_TO_DATE(fecha, '%d/%m/%Y') DESC, id_postura DESC
-            LIMIT 1;
-        """
-        cursor.execute(sql, (patient_id, target_date_str))
-        result = cursor.fetchone()
-        return result
-    except Error as e:
-        print(f"Error en get_latest_postura_on_or_before_date: {e}")
-        return None
-    finally:
-        if cursor:
-            cursor.close()
+
 
 
 @clinical_bp.route('/api/mark_notes_seen', methods=['POST'])
@@ -3638,3 +3514,66 @@ def api_add_general_note(patient_id):
         if connection: 
             connection.close()
 
+def get_first_postura_on_or_after_date(connection, patient_id, target_date_str):
+    cursor = None
+    try:
+        target_date_sql = parse_date(target_date_str)
+        cursor = connection.cursor(dictionary=True, buffered=True)
+        # Buscar el primero en o después
+        query = "SELECT * FROM postura WHERE id_px = %s AND fecha >= %s ORDER BY fecha ASC, id_postura ASC LIMIT 1"
+        cursor.execute(query, (patient_id, target_date_sql))
+        result = cursor.fetchone()
+        
+        if not result:
+            # Fallback: buscar el más reciente antes
+            query_fallback = "SELECT * FROM postura WHERE id_px = %s AND fecha < %s ORDER BY fecha DESC, id_postura DESC LIMIT 1"
+            cursor.execute(query_fallback, (patient_id, target_date_sql))
+            result = cursor.fetchone()
+            
+        return result
+    except Error: return None
+    finally: 
+        if cursor: cursor.close()
+
+def update_postura_ortho_notes(connection, id_postura, notas):
+    cursor = None
+    try:
+        cursor = connection.cursor()
+        query = "UPDATE postura SET notas_pruebas_ortoneuro = %s WHERE id_postura = %s"
+        cursor.execute(query, (notas, id_postura))
+        return True
+    except Error as e:
+        print(f"Error update_postura_ortho_notes: {e}")
+        return False
+    finally: 
+        if cursor: cursor.close()
+
+def get_latest_postura_on_or_before_date(connection, patient_id, target_date_str):
+    cursor = None
+    try:
+        target_date_sql = parse_date(target_date_str)
+        cursor = connection.cursor(dictionary=True, buffered=True)
+        query = "SELECT * FROM postura WHERE id_px = %s AND fecha <= %s ORDER BY fecha DESC, id_postura DESC LIMIT 1"
+        cursor.execute(query, (patient_id, target_date_sql))
+        data = cursor.fetchone()
+        if data:
+            for k in ['pie_cm', 'zapato_cm', 'fuerza_izq', 'fuerza_der']:
+                if data.get(k): data[k] = float(data[k])
+        return data
+    except Error: return None
+    finally: 
+        if cursor: cursor.close()
+
+def get_latest_antecedente_on_or_before_date(connection, patient_id, target_date_str):
+    cursor = None
+    try:
+        target_date_obj = datetime.strptime(target_date_str, '%d/%m/%Y')
+        cursor = connection.cursor(dictionary=True, buffered=True)
+        query = "SELECT * FROM antecedentes WHERE id_px = %s AND fecha <= %s ORDER BY fecha DESC, id_antecedente DESC LIMIT 1"
+        cursor.execute(query, (patient_id, target_date_obj.strftime('%Y-%m-%d')))
+        data = cursor.fetchone()
+        if data and data.get('calzado'): data['calzado'] = float(data['calzado'])
+        return data
+    except (ValueError, Error): return None
+    finally: 
+        if cursor: cursor.close()

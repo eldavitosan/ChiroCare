@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8 col-lg-6">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0"><i class="fas fa-user-cog"></i> Mi Perfil y Preferencias</h4>
+                </div>
+                <div class="card-body">
+                    <h5 class="card-title">Hola, {{ doctor.nombre }}</h5>
+                    <p class="text-muted">Usuario: {{ doctor.usuario }}</p>
+                    <hr>
+
+                    <form method="POST" action="{{ url_for('auth.perfil') }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+
+                        <div class="mb-4">
+                            <label for="redireccion_select" class="form-label fw-bold">
+                                <i class="fas fa-route"></i> Al terminar de guardar un Seguimiento:
+                            </label>
+                            <select class="form-select" name="redireccion_select" id="redireccion_select">
+                                <option value="0" {% if doctor.config_redireccion_seguimiento==0 %}selected{% endif %}>
+                                    Mantenerse en la misma página (Seguir editando)
+                                </option>
+                                <option value="1" {% if doctor.config_redireccion_seguimiento==1 %}selected{% endif %}>
+                                    Ir al Menú Principal (Inicio)
+                                </option>
+                                <option value="2" {% if doctor.config_redireccion_seguimiento==2 %}selected{% endif %}>
+                                    Ir a los Detalles del Paciente
+                                </option>
+                            </select>
+                            <div class="form-text">Esto define a dónde te enviará el sistema automáticamente después de
+                                guardar una nota.</div>
+                        </div>
+
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-success">
+                                <i class="fas fa-save"></i> Guardar Preferencias
+                            </button>
+                            <a href="{{ url_for('main') }}" class="btn btn-outline-secondary">Cancelar</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

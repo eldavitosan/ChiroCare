@@ -1,27 +1,13 @@
 import os
+import json
 import google.generativeai as genai
 from groq import Groq
-#from openai import OpenAI
-#from dateutil.relativedelta import relativedelta
-#import time
-from datetime import timedelta,datetime, date
-#import uuid
-#import base64
-import json
-from PIL import Image
 from flask import Flask, render_template, request, redirect, jsonify, session, flash, url_for, Response, current_app
-from database import (connect_to_db,  
-                      get_patients_by_recent_followup, get_resumen_dia_anterior
-                      )
-#from werkzeug.security import check_password_hash
-from werkzeug.utils import secure_filename
-from functools import wraps
-from mysql.connector import Error
-#from io import BytesIO # Para manejar el PDF en memoria
-#from xhtml2pdf import pisa # La librería para convertir HTML a PDF
-#import cv2
-#import mediapipe as mp
 from dotenv import load_dotenv
+from datetime import datetime, date
+from db.connection import connect_to_db
+from db.reports import get_resumen_dia_anterior
+from db.patients import get_patients_by_recent_followup
 load_dotenv()  # Cargar variables de entorno desde el archivo .env
 
 from blueprints.auth import auth_bp
@@ -185,7 +171,7 @@ def resumen_dia_anterior():
     """
     connection = None
     resumen_data = []
-    fecha_ayer_str = (datetime.now() - timedelta(days=1)).strftime('%d/%m/%Y')
+    fecha_ayer_str = to_frontend_str(datetime.now() - timedelta(days=1))
 
     try:
         connection = connect_to_db()

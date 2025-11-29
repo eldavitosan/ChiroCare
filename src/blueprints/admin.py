@@ -10,19 +10,25 @@ from decimal import Decimal
 from forms import (RegisterForm, EditDoctorForm, ChangePasswordForm, ClinicaForm, ProductoServicioForm,
                    FormIngresos, FormUtilidad, FormNuevosPacientes, FormPacientesFrecuentes, FormSeguimientos, 
                    FormUsoPlanes)
-from database import (
-    add_user, connect_to_db, get_all_doctors, get_doctor_by_id,
+from db.connection import connect_to_db
+from db.auth import (
+    add_user, get_all_doctors, get_doctor_by_id,
     update_doctor_details, update_doctor_password, set_doctor_active_status,
-    count_total_pacientes, count_total_doctores, count_seguimientos_hoy,
-    get_all_centros, get_centro_by_id, add_centro, update_centro,
-    get_ingresos_por_periodo, get_ingresos_por_doctor_periodo,
+    count_total_doctores, get_all_centros, get_centro_by_id, add_centro, update_centro
+)
+from db.patients import count_total_pacientes
+from db.reports import (
+    count_seguimientos_hoy, get_ingresos_por_periodo, get_ingresos_por_doctor_periodo,
     get_utilidad_estimada_por_periodo, get_utilidad_estimada_por_doctor_periodo,
     get_pacientes_nuevos_por_periodo, get_pacientes_mas_frecuentes,
-    get_seguimientos_por_doctor_periodo, get_uso_planes_de_cuidado,
+    get_seguimientos_por_doctor_periodo, get_uso_planes_de_cuidado
+)
+from db.finance import (
     get_all_productos_servicios, get_producto_servicio_by_id,
     add_producto_servicio, update_producto_servicio, 
     set_producto_servicio_active_status
 )
+from utils.date_manager import to_frontend_str
 
 # Importar los decoradores
 from decorators import login_required, admin_required
@@ -171,7 +177,7 @@ def admin_dashboard():
         
         num_pacientes = count_total_pacientes(connection)
         num_doctores = count_total_doctores(connection)
-        today_for_db = datetime.now().strftime('%d/%m/%Y')
+        today_for_db = to_frontend_str(datetime.now())
         num_seguimientos_hoy = count_seguimientos_hoy(connection, today_for_db)
         
         return render_template('admin/dashboard_admin.html',

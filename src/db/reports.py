@@ -1,0 +1,383 @@
+from mysql.connector import Error
+from datetime import datetime, date, timedelta
+from utils.date_manager import to_db_str, to_frontend_str
+# Importamos funciones de otros módulos para reutilizar lógica en el resumen diario
+from .finance import get_terapias_fisicas, get_specific_plan_cuidado, get_active_plans_for_patient
+from .clinical import get_latest_anamnesis, get_seguimientos_for_plan
+
+# --- Reportes Financieros ---
+
+def get_ingresos_por_periodo(connection, fecha_inicio_str, fecha_fin_str, doctor_id=None):
+    cursor = None
+    try:
+        f_ini = datetime.strptime(fecha_inicio_str, '%Y-%m-%d')
+        f_fin = datetime.strptime(fecha_fin_str, '%Y-%m-%d')
+        diff = (f_fin - f_ini).days
+        
+        # Determinar agrupación
+        if diff <= 45: 
+            col, grp, fmt = "fecha", "fecha", "%Y-%m-%d"
+        elif diff <= 730:
+            col, grp, fmt = "DATE_FORMAT(fecha, '%Y-%m')", "periodo", "%Y-%m"
+        else:
+            col, grp, fmt = "YEAR(fecha)", "periodo", "%Y"
+        
+        sel_col = f"{col} AS periodo"
+        params = [fecha_inicio_str, fecha_fin_str]
+        filtro = ""
+        if doctor_id:
+            filtro = "AND id_dr = %s "
+            params.append(doctor_id)
+
+        query = f"""
+            SELECT {sel_col}, SUM(total_neto) AS total_ingresos_periodo, COUNT(id_recibo) AS numero_recibos
+            FROM recibos WHERE fecha BETWEEN %s AND %s {filtro}
+            GROUP BY {grp} ORDER BY {grp} ASC
+        """
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute(query, tuple(params))
+        res = cursor.fetchall()
+        for r in res:
+            r['total_ingresos_periodo'] = float(r.get('total_ingresos_periodo') or 0)
+            # Formatear periodo para el frontend si es fecha
+            if isinstance(r['periodo'], date): r['periodo'] = r['periodo'].strftime('%d/%m/%Y')
+            else: r['periodo'] = str(r['periodo'])
+            r['formato_periodo_python'] = fmt
+        return res
+    except Exception as e:
+        print(f"Error report ingresos: {e}")
+        return []
+    finally: 
+        if cursor: cursor.close()
+
+def get_ingresos_por_doctor_periodo(connection, fecha_inicio_str, fecha_fin_str, doctor_id=None):
+    cursor = None
+    try:
+        params = [fecha_inicio_str, fecha_fin_str]
+        filtro = ""
+        if doctor_id:
+            filtro = "AND r.id_dr = %s "
+            params.append(doctor_id)
+
+        query = f"""
+            SELECT d.id_dr, d.nombre AS nombre_doctor, SUM(r.total_neto) AS total_ingresos_doctor, COUNT(r.id_recibo) AS numero_recibos_doctor
+            FROM recibos r JOIN dr d ON r.id_dr = d.id_dr
+            WHERE r.fecha BETWEEN %s AND %s {filtro}
+            GROUP BY d.id_dr, d.nombre
+            ORDER BY total_ingresos_doctor DESC, d.nombre ASC
+        """
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute(query, tuple(params))
+        res = cursor.fetchall()
+        for r in res:
+            r['total_ingresos_doctor'] = float(r.get('total_ingresos_doctor') or 0)
+        return res
+    except Error as e:
+        print(f"Error report ingresos doctor: {e}")
+        return []
+    finally: 
+        if cursor: cursor.close()
+
+def get_utilidad_estimada_por_periodo(connection, fecha_inicio_str, fecha_fin_str, doctor_id=None):
+    cursor = None
+    try:
+        f_ini = datetime.strptime(fecha_inicio_str, '%Y-%m-%d')
+        f_fin = datetime.strptime(fecha_fin_str, '%Y-%m-%d')
+        diff = (f_fin - f_ini).days
+        
+        if diff <= 45: col, grp, fmt = "r.fecha", "r.fecha", "%Y-%m-%d"
+        elif diff <= 730: col, grp, fmt = "DATE_FORMAT(r.fecha, '%Y-%m')", "periodo", "%Y-%m"
+        else: col, grp, fmt = "YEAR(r.fecha)", "periodo", "%Y"
+
+        params = [fecha_inicio_str, fecha_fin_str]
+        filtro = ""
+        if doctor_id:
+            filtro = "AND r.id_dr = %s "
+            params.append(doctor_id)
+
+        query = f"""
+            SELECT {col} AS periodo,
+            SUM((rd.cantidad * rd.costo_unitario_venta - IFNULL(rd.descuento_linea, 0)) - (rd.cantidad * IFNULL(rd.costo_unitario_compra, 0))) AS total_utilidad_estimada_periodo,
+            COUNT(DISTINCT r.id_recibo) AS numero_recibos_con_utilidad, SUM(r.total_neto) AS total_ingresos_netos_periodo
+            FROM recibos r JOIN recibo_detalle rd ON r.id_recibo = rd.id_recibo
+            WHERE r.fecha BETWEEN %s AND %s {filtro}
+            GROUP BY {grp} ORDER BY {grp} ASC
+        """
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute(query, tuple(params))
+        res = cursor.fetchall()
+        for r in res:
+            r['total_utilidad_estimada_periodo'] = float(r.get('total_utilidad_estimada_periodo') or 0)
+            r['total_ingresos_netos_periodo'] = float(r.get('total_ingresos_netos_periodo') or 0)
+            if isinstance(r['periodo'], date): r['periodo'] = r['periodo'].strftime('%d/%m/%Y')
+            else: r['periodo'] = str(r['periodo'])
+            r['formato_periodo_python'] = fmt
+        return res
+    except Exception as e:
+        print(f"Error report utilidad: {e}")
+        return []
+    finally: 
+        if cursor: cursor.close()
+
+def get_utilidad_estimada_por_doctor_periodo(connection, fecha_inicio_str, fecha_fin_str, doctor_id=None):
+    cursor = None
+    try:
+        params = [fecha_inicio_str, fecha_fin_str]
+        filtro = ""
+        if doctor_id:
+            filtro = "AND r.id_dr = %s "
+            params.append(doctor_id)
+
+        query = f"""
+            SELECT dr.id_dr, dr.nombre AS nombre_doctor,
+            SUM((rd.cantidad * rd.costo_unitario_venta - IFNULL(rd.descuento_linea, 0)) - (rd.cantidad * IFNULL(rd.costo_unitario_compra, 0))) AS total_utilidad_estimada_doctor,
+            COUNT(DISTINCT r.id_recibo) AS numero_recibos_doctor, SUM(r.total_neto) AS total_ingresos_netos_doctor
+            FROM recibos r JOIN recibo_detalle rd ON r.id_recibo = rd.id_recibo JOIN dr ON r.id_dr = dr.id_dr 
+            WHERE r.fecha BETWEEN %s AND %s {filtro}
+            GROUP BY dr.id_dr, dr.nombre ORDER BY total_utilidad_estimada_doctor DESC, dr.nombre ASC
+        """
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute(query, tuple(params))
+        res = cursor.fetchall()
+        for r in res:
+            r['total_utilidad_estimada_doctor'] = float(r.get('total_utilidad_estimada_doctor') or 0)
+            r['total_ingresos_netos_doctor'] = float(r.get('total_ingresos_netos_doctor') or 0)
+        return res
+    except Error as e:
+        print(f"Error report utilidad doctor: {e}")
+        return []
+    finally: 
+        if cursor: cursor.close()
+
+# --- Reportes Operativos ---
+
+def get_pacientes_nuevos_por_periodo(connection, fecha_inicio_str, fecha_fin_str, doctor_id=0):
+    cursor = None
+    try:
+        f_ini = datetime.strptime(fecha_inicio_str, '%Y-%m-%d')
+        f_fin = datetime.strptime(fecha_fin_str, '%Y-%m-%d')
+        diff = (f_fin - f_ini).days
+        
+        params = [fecha_inicio_str, fecha_fin_str]
+        filtro = ""
+        if doctor_id != 0:
+            filtro = "AND id_dr = %s "
+            params.append(doctor_id)
+
+        # 1. Lista
+        query_lista = f"""
+            SELECT id_px, nombre, apellidop, apellidom, fecha AS fecha_registro
+            FROM datos_personales WHERE fecha BETWEEN %s AND %s {filtro} ORDER BY fecha ASC, id_px ASC
+        """
+        cursor = connection.cursor(dictionary=True, buffered=True)
+        cursor.execute(query_lista, tuple(params))
+        lista = cursor.fetchall()
+
+        # 2. Gráfica
+        if diff <= 45: col, grp, fmt = "fecha", "fecha", "%d %b %Y"
+        elif diff <= 730: col, grp, fmt = "DATE_FORMAT(fecha, '%Y-%m')", "periodo_grafica", "%b %Y"
+        else: col, grp, fmt = "YEAR(fecha)", "periodo_grafica", "%Y"
+
+        query_grafica = f"""
+            SELECT {col} AS periodo_grafica, COUNT(id_px) AS conteo_pacientes_nuevos
+            FROM datos_personales WHERE fecha BETWEEN %s AND %s {filtro}
+            GROUP BY {grp} ORDER BY {grp} ASC
+        """
+        cursor.execute(query_grafica, tuple(params))
+        grafica_raw = cursor.fetchall()
+        
+        grafica = []
+        for item in grafica_raw:
+            p_raw = item.get('periodo_grafica')
+            label = str(p_raw)
+            if isinstance(p_raw, date): label = p_raw.strftime('%d %b %Y')
+            elif isinstance(p_raw, str) and len(p_raw) == 7: # YYYY-MM
+                 try: label = datetime.strptime(p_raw, '%Y-%m').strftime('%b %Y')
+                 except: pass
+            
+            grafica.append({'periodo_label': label, 'conteo': item.get('conteo_pacientes_nuevos', 0)})
+            
+        return lista, grafica
+    except Exception as e:
+        print(f"Error report pacientes nuevos: {e}")
+        return [], []
+    finally: 
+        if cursor: cursor.close()
+
+def get_pacientes_mas_frecuentes(connection, fecha_inicio_str, fecha_fin_str, limit=10):
+    cursor = None
+    try:
+        f_ini = to_db_str(fecha_inicio_str)
+        f_fin = to_db_str(fecha_fin_str)
+        query = """
+            SELECT dp.id_px, dp.nombre, dp.apellidop, dp.apellidom, COUNT(q.id_seguimiento) AS numero_seguimientos
+            FROM datos_personales dp JOIN quiropractico q ON dp.id_px = q.id_px
+            WHERE q.fecha BETWEEN %s AND %s
+            GROUP BY dp.id_px, dp.nombre, dp.apellidop, dp.apellidom
+            ORDER BY numero_seguimientos DESC, dp.apellidop ASC, dp.nombre ASC LIMIT %s
+        """
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute(query, (f_ini, f_fin, limit))
+        return cursor.fetchall()
+    except Exception as e:
+        print(f"Error report frecuentes: {e}")
+        return []
+    finally: 
+        if cursor: cursor.close()
+
+def get_seguimientos_por_doctor_periodo(connection, fecha_inicio_str, fecha_fin_str, doctor_id=0):
+    cursor = None
+    try:
+        params = [fecha_inicio_str, fecha_fin_str]
+        filtro = ""
+        if doctor_id != 0:
+            filtro = "AND q.id_dr = %s "
+            params.append(doctor_id)
+
+        query = f"""
+            SELECT d.id_dr, d.nombre AS nombre_doctor, COUNT(q.id_seguimiento) AS numero_consultas
+            FROM quiropractico q JOIN dr d ON q.id_dr = d.id_dr
+            WHERE q.fecha BETWEEN %s AND %s {filtro}
+            GROUP BY d.id_dr, d.nombre ORDER BY numero_consultas DESC, d.nombre ASC
+        """
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute(query, tuple(params))
+        return cursor.fetchall()
+    except Error as e:
+        print(f"Error report consultas doctor: {e}")
+        return []
+    finally: 
+        if cursor: cursor.close()
+
+def get_uso_planes_de_cuidado(connection, fecha_inicio_str, fecha_fin_str):
+    cursor = None
+    try:
+        query_planes = """
+            SELECT pc.id_plan, pc.id_px, dp.nombre AS nombre_paciente, dp.apellidop AS apellidop_paciente, 
+                   dp.apellidom AS apellidom_paciente, pc.fecha AS fecha_creacion_plan, pc.pb_diagnostico, 
+                   pc.visitas_qp AS visitas_qp_planificadas, dr.nombre AS nombre_doctor_plan
+            FROM plancuidado pc JOIN datos_personales dp ON pc.id_px = dp.id_px LEFT JOIN dr ON pc.id_dr = dr.id_dr
+            WHERE pc.fecha BETWEEN %s AND %s ORDER BY pc.fecha DESC, pc.id_plan DESC
+        """
+        cursor = connection.cursor(dictionary=True, buffered=True)
+        cursor.execute(query_planes, (fecha_inicio_str, fecha_fin_str))
+        planes = cursor.fetchall()
+        if not planes: return {'total_creados': 0, 'activos': 0, 'completados': 0, 'lista_detallada_planes': []}
+
+        activos, completados = 0, 0
+        for plan in planes:
+            cursor.execute("SELECT COUNT(id_seguimiento) as conteo FROM quiropractico WHERE id_plan_cuidado_asociado = %s", (plan['id_plan'],))
+            realizadas = cursor.fetchone()['conteo']
+            plan['visitas_qp_realizadas'] = realizadas
+            
+            if realizadas >= (plan.get('visitas_qp_planificadas') or 0):
+                plan['estado_plan'] = 'Completado'; completados += 1
+            else:
+                plan['estado_plan'] = 'Activo'; activos += 1
+            
+            plan['nombre_completo_paciente'] = f"{plan['nombre_paciente']} {plan['apellidop_paciente']} {plan.get('apellidom_paciente','')}".strip()
+
+        return {'total_creados': len(planes), 'activos': activos, 'completados': completados, 'lista_detallada_planes': planes}
+    except Exception as e:
+        print(f"Error report uso planes: {e}")
+        return {'total_creados': 0, 'activos': 0, 'completados': 0, 'lista_detallada_planes': []}
+    finally: 
+        if cursor: cursor.close()
+
+# --- Resumen Diario (Dashboard Principal) ---
+
+def get_resumen_dia_anterior(connection):
+    """Obtiene resumen de pacientes atendidos (Optimizado con 1 query de fecha)."""
+    cursor = None
+    resumen = []
+    try:
+        terapias = {str(t['id_prod']): t['nombre'] for t in get_terapias_fisicas(connection)}
+        cursor = connection.cursor(dictionary=True)
+        
+        # 1. Encontrar última fecha con datos (Optimizado)
+        # Busca en los últimos 30 días para no escanear toda la tabla
+        cursor.execute("SELECT MAX(fecha) as ultima_fecha FROM quiropractico WHERE fecha >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)")
+        res = cursor.fetchone()
+        
+        if not res or not res['ultima_fecha']: return []
+        
+        fecha_target = res['ultima_fecha'].strftime('%Y-%m-%d') if isinstance(res['ultima_fecha'], (date, datetime)) else str(res['ultima_fecha'])
+        
+        # 2. Obtener Pacientes de esa fecha
+        cursor.execute("SELECT DISTINCT id_px FROM quiropractico WHERE fecha = %s", (fecha_target,))
+        p_ids = [row['id_px'] for row in cursor.fetchall()]
+        
+        for pid in p_ids:
+            # Info básica
+            cursor.execute("SELECT nombre, apellidop, apellidom FROM datos_personales WHERE id_px=%s", (pid,))
+            pdb = cursor.fetchone()
+            p_info = {'id_px': pid, 'nombre_completo': f"{pdb['nombre']} {pdb['apellidop']} {pdb.get('apellidom','')}".strip()}
+            
+            # Anamnesis
+            anam = get_latest_anamnesis(connection, pid)
+            if anam: p_info['condicion1_anamnesis'] = anam.get('condicion1', 'N/A')
+            
+            # Últimos 2 seguimientos (ayer y anteayer clínico)
+            cursor.execute("""
+                SELECT fecha, notas, terapia, id_plan_cuidado_asociado,
+                CONCAT_WS(', ', NULLIF(occipital,''), NULLIF(atlas,''), NULLIF(l5,''), NULLIF(sacro,''), NULLIF(iliaco_d,'')) as segmentos_resumidos
+                FROM quiropractico WHERE id_px=%s ORDER BY fecha DESC, id_seguimiento DESC LIMIT 2
+            """, (pid,))
+            segs = cursor.fetchall()
+            
+            if segs:
+                s_ayer = segs[0]
+                t_ids = [tid for tid in s_ayer.get('terapia', '0,').split(',') if tid and tid != '0']
+                t_txt = ', '.join([terapias.get(tid, tid) for tid in t_ids]) or 'Ninguna'
+                
+                f_str = s_ayer['fecha'].strftime('%d/%m/%Y') if isinstance(s_ayer['fecha'], date) else str(s_ayer['fecha'])
+                p_info['seguimiento_ayer'] = {'fecha': f_str, 'segmentos': s_ayer['segmentos_resumidos'], 'terapias': t_txt, 'notas': s_ayer.get('notas')}
+                
+                # Estado del Plan
+                id_plan = s_ayer.get('id_plan_cuidado_asociado')
+                if not id_plan:
+                    plans = get_active_plans_for_patient(connection, pid)
+                    if plans: id_plan = plans[0]['id_plan']
+                
+                if id_plan:
+                    plan = get_specific_plan_cuidado(connection, id_plan)
+                    if plan:
+                        all_segs = get_seguimientos_for_plan(connection, id_plan)
+                        qp_used = len(all_segs)
+                        tf_used = sum(1 for s in all_segs if s.get('terapia') and s.get('terapia') != '0')
+                        p_info['plan_activo'] = {
+                            'nombre': plan.get('pb_diagnostico'),
+                            'qp_restantes': (plan.get('visitas_qp') or 0) - qp_used,
+                            'tf_restantes': (plan.get('visitas_tf') or 0) - tf_used
+                        }
+
+            resumen.append(p_info)
+        return resumen
+    except Error as e:
+        print(f"Error resumen: {e}")
+        return []
+    finally: 
+        if cursor: cursor.close()
+
+def count_seguimientos_hoy(connection, fecha_hoy_str):
+    """
+    Cuenta los seguimientos realizados en una fecha específica.
+    Convierte la fecha al formato de DB antes de consultar.
+    """
+    cursor = None
+    try:
+        # Convertir 'dd/mm/yyyy' a 'yyyy-mm-dd'
+        fecha_db = to_db_str(fecha_hoy_str)
+        
+        query = "SELECT COUNT(*) as total_seguimientos_hoy FROM quiropractico WHERE fecha = %s"
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute(query, (fecha_db,))
+        result = cursor.fetchone()
+        return result['total_seguimientos_hoy'] if result and 'total_seguimientos_hoy' in result else 0
+    except Exception as e:
+        print(f"Error contando seguimientos de hoy: {e}")
+        return 0
+    finally:
+        if cursor:
+            cursor.close()
+

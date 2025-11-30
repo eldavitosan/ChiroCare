@@ -1872,6 +1872,30 @@ def manage_seguimiento(patient_id):
 
             active_plan_status = get_active_plan_status(connection, patient_id)
 
+            # --- CÁLCULO DE VISITAS (LÓGICA EN PYTHON) ---
+            # 1. Extraemos valores seguros (usamos {} por si active_plan_status es None)
+            safe_plan = active_plan_status if active_plan_status else {}
+            
+            qp_total = safe_plan.get('visitas_qp', 0)
+            qp_restantes = safe_plan.get('qp_restantes', 0) 
+            tf_total = safe_plan.get('visitas_tf', 0)
+            tf_restantes = safe_plan.get('tf_restantes', 0)
+
+            # 2. Calculamos cuántas se han consumido realmente (Matemática base)
+            visita_qp_actual = qp_total - qp_restantes
+            visita_tf_actual = tf_total - tf_restantes
+
+            # 3. REGLA DE NEGOCIO:
+            # Si id_seguimiento_a_cargar es None, estamos CREANDO un registro nuevo.
+            # Por lo tanto, la visita actual será la siguiente a consumir (+1).
+            if id_seguimiento_a_cargar is None:
+                visita_qp_actual += 1
+                visita_tf_actual += 1
+            
+            # Si id_seguimiento_a_cargar EXISTE, estamos VIENDO un registro pasado.
+            # En ese caso, la BD ya descontó la visita, así que el cálculo base es correcto.
+            # ---------------------------------------------
+
             show_ortho_notes_field = False
             ortho_notes_today = ""
             id_postura_hoy_para_form = None
@@ -1903,7 +1927,16 @@ def manage_seguimiento(patient_id):
                                    active_plan_status=active_plan_status,
                                    show_ortho_notes_field=show_ortho_notes_field,
                                    ortho_notes_today=ortho_notes_today,
-                                   id_postura_hoy_para_form=id_postura_hoy_para_form
+                                   id_postura_hoy_para_form=id_postura_hoy_para_form,
+                                   
+                                   # PASAMOS LAS VARIABLES YA CALCULADAS
+                                   visita_qp_actual=visita_qp_actual,
+                                   visita_tf_actual=visita_tf_actual,
+                                   qp_total=qp_total,
+                                   qp_restantes=qp_restantes,
+                                   tf_total=tf_total,
+                                   tf_restantes=tf_restantes,
+                                   tf_consumidas=visita_tf_actual 
                                   )
     except Exception as e:
         print(f"Error general en manage_seguimiento (PID {patient_id}): {e}")

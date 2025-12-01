@@ -42,13 +42,31 @@ except Exception as e:
 
 # 3. Guardar la configuración RAW (para los modelos de texto)
 app.config['IA_MODELS_CONFIG'] = ia_config 
+# --- 5. Configurar e INICIALIZAR el modelo de TEXTO (Groq) ---
+groq_api_key = os.environ.get("GROQ_API_KEY")
+if groq_api_key:
+    try:
+        print(f"INFO: Inicializando cliente Groq...")
+        # Creamos el cliente
+        client_groq = Groq(api_key=groq_api_key)
+            
+        # ¡ESTA ES LA LÍNEA QUE FALTABA! Lo guardamos en la config
+        app.config['GROQ_CLIENT'] = client_groq 
+            
+        print("✅ Cliente Groq inicializado y guardado en app.config")
+    except Exception as e:
+        print(f"ERROR: Falló al crear cliente Groq: {e}")
+        app.config['GROQ_CLIENT'] = None
+else:
+    print("WARN: GROQ_API_KEY no encontrada. El modelo de texto Groq estará deshabilitado.")
+    app.config['GROQ_CLIENT'] = None
 
 # 4. Configurar e INICIALIZAR el modelo de VISIÓN (Gemini)
 gemini_api_key = os.environ.get("GEMINI_API_KEY")
 if gemini_api_key:
     genai.configure(api_key=gemini_api_key)
     # Leemos el nombre del modelo de visión del JSON
-    vision_model_name = ia_config.get('vision_model', 'gemini-1.5-pro-latest')
+    vision_model_name = ia_config.get('vision_model', 'gemini-2.5-flash')
     print(f"INFO: Inicializando modelo de visión Gemini: {vision_model_name}")
     try:
         # Creamos el cliente con ESE modelo y lo guardamos
@@ -59,6 +77,8 @@ if gemini_api_key:
 else:
     print("WARN: GEMINI_API_KEY no encontrada. El modelo generativo de visión estará deshabilitado.")
     app.config['GENERATIVE_MODEL'] = None
+
+
     
     
 @app.template_filter('f_date')

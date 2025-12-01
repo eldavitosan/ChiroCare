@@ -44,6 +44,7 @@ from xhtml2pdf import pisa
 import cv2
 import mediapipe as mp
 from werkzeug.utils import secure_filename
+import traceback
 
 from forms import AntecedentesForm,AnamnesisForm
 # Importar funciones de base de datos necesarias para ESTAS rutas
@@ -207,6 +208,13 @@ def generar_historia_con_ia(datos_formulario, mapas):
     # 1. Leer la lista de modelos desde la config
     text_models_list = current_app.config['IA_MODELS_CONFIG'].get('text_models', [])
 
+    # ---------------------------------------------------------
+    # DIAGNÓSTICO: ¿Por qué se salta Groq?
+    # ---------------------------------------------------------
+    print(f"--- DIAGNÓSTICO PREVIO ---")
+    print(f"Estado de groq_client: {'ACTIVO' if groq_client else 'NONE (No existe)'}")
+    print(f"Lista de modelos: {text_models_list}")
+
     # 2. Intentar con Groq (si está disponible)
     if groq_client and text_models_list:
         for model_name in text_models_list:
@@ -222,14 +230,19 @@ def generar_historia_con_ia(datos_formulario, mapas):
                     break # ¡Éxito! Salimos del bucle
                 raise ValueError("Respuesta de Groq vacía.")
             except Exception as e:
-                print(f"ADVERTENCIA: Modelo Groq '{model_name}' falló: {e}. Probando siguiente.")
+                print(f"\n🔴 ERROR DETALLADO DE GROQ: {e}")
+                print("--- Traceback (Rastro del error) ---")
+                traceback.print_exc() 
+                print("------------------------------------\n")
+
+                print("INFO1: Groq falló. Intentando generar historia con Gemini...")
         
         if historia_generada:
             return historia_generada # Devolver si Groq tuvo éxito
 
     # 3. Intentar con Gemini (si Groq falló o no estaba disponible)
     if not historia_generada and generative_model:
-        print("INFO: Groq falló. Intentando generar historia con Gemini...")
+        print("INFO2: Groq falló. Intentando generar historia con Gemini...")
         try:
             full_prompt_gemini = f"{system_prompt}\n{user_prompt}"
             response = generative_model.generate_content(full_prompt_gemini)
@@ -798,15 +811,6 @@ def manage_antecedentes(patient_id):
         # --- Poblar Opciones (Choices) Dinámicamente ---
         form.cond_gen.choices = [(k, v) for k, v in CONDICIONES_GENERALES_MAP.items()]
         
-        # --- INICIO DE BLOQUE DEBUG 1 ---
-        # (Añade esto justo ANTES de form.validate_on_submit())
-        if request.method == 'POST':
-            print("\n--- DEBUG ANTECEDENTES (POST) ---")
-            print(f"Datos crudos (request.form): {request.form}")
-            # Esto es CLAVE: nos muestra qué valores envían tus checkboxes
-            print(f"Valores de 'cond_gen' (getlist): {request.form.getlist('cond_gen')}")
-            print("---------------------------------")
-        # --- FIN DE BLOQUE DEBUG 1 ---
 
         if form.validate_on_submit():
             # --- LÓGICA POST (Guardar datos) ---
@@ -915,15 +919,6 @@ def manage_antecedentes(patient_id):
         else: 
             # --- LÓGICA GET (Cargar datos para mostrar) ---
 
-            # --- INICIO DE BLOQUE DEBUG 2 ---
-            # (Añade esto DENTRO del 'else' principal,
-            #  para que se ejecute si la validación falla en un POST)
-            if request.method == 'POST':
-                print("\n--- DEBUG: VALIDACIÓN FALLIDA ---")
-                print(f"Errores del formulario: {form.errors}")
-                print(f"Datos procesados por WTForms (form.cond_gen.data): {form.cond_gen.data}")
-                print("--- FIN DEBUG VALIDACIÓN ---\n")
-            # --- FIN DE BLOQUE DEBUG 2 ---
 
             selected_id_str = request.args.get('selected_id')
             selected_id = int(selected_id_str) if selected_id_str else None
@@ -1034,7 +1029,6 @@ def manage_anamnesis(patient_id):
 
         if form.validate_on_submit():
             # --- LÓGICA POST ---
-            print(f"\n--- DEBUG (FORM SUBMIT): 'diagrama_puntos' recibido = {request.form.get('diagrama_puntos')} ---")
             id_anamnesis_editado_str = request.form.get('id_anamnesis') 
             id_anamnesis_editado = int(id_anamnesis_editado_str) if id_anamnesis_editado_str else None
 
@@ -1144,10 +1138,6 @@ def manage_anamnesis(patient_id):
             is_editable = True
             current_data = None 
             
-            # --- INICIO DEBUG ---
-            print(f"\n--- DEBUG ANAMNESIS (PID: {patient_id}) ---")
-            print(f"--- 1. Método: {request.method} ---")
-            # --- FIN DEBUG ---
 
             if request.method == 'POST':
                 # --- POST con validación fallida ---
@@ -1174,7 +1164,6 @@ def manage_anamnesis(patient_id):
 
             else:
                 # --- Lógica GET Pura ---
-                print(f"--- 2. Entrando a RAMA GET ---")
                 selected_id_str = request.args.get('selected_id')
                 selected_id = int(selected_id_str) if selected_id_str else None
 
@@ -1214,16 +1203,7 @@ def manage_anamnesis(patient_id):
                 
                 selected_diagrama_puntos = current_data.get('diagrama', '0,').split(',')
                 
-                print(f"--- 3. Variables (rama GET) actualizadas y 'form.process()' ejecutado ---")
 
-            # --- DEBUG FINAL ANTES DEL RETURN ---
-            print(f"--- 5. Variables ANTES de 'render_template' (ahora deberían estar todas definidas) ---")
-            print(f"   > form (tipo): {type(form)}")
-            print(f"   > is_editable: {locals().get('is_editable', '--- ERROR ---')}")
-            print(f"   > loaded_id_anamnesis: {locals().get('id_anamnesis_a_cargar', '--- ERROR ---')}")
-            print(f"   > fecha_cargada: {locals().get('fecha_cargada_obj', '--- ERROR ---')}")
-            print(f"   > selected_diagrama_puntos (primeros 5): {selected_diagrama_puntos[:5]}")
-            print("---------------------------------------------------\n")
 
             # Este return ahora es seguro para ambas ramas (POST-fallido y GET)
             return render_template('anamnesis_form.html',
@@ -1329,7 +1309,6 @@ def manage_pruebas(patient_id):
                 # Se puede añadir Rx si es admin o si el registro base ya existe (aunque no se pueda editar)
                 puede_anadir_rx = is_admin or record_exists
 
-                print(f"DEBUG POST PRUEBAS: FechaObjetivo={fecha_guardada}, EsHoy={es_fecha_de_hoy}, EsAdmin={is_admin}, PuedeEditarTodo={puede_editar_todo}, RecordExists={record_exists}, PuedeAddRx={puede_anadir_rx}")
 
                 # Verificar si la acción general está permitida
                 # Permite añadir datos faltantes (incluyendo Rx) si el registro existe, aunque no sea hoy/admin
@@ -1539,16 +1518,12 @@ def manage_pruebas(patient_id):
             # Lógica para determinar qué fecha cargar 
             if selected_fecha_param == 'hoy':
                 target_date_to_load = today_str
-                print(f"DEBUG Pruebas GET: Cargando 'hoy' ({today_str}) explícitamente.")
             elif selected_fecha_param and selected_fecha_param in available_dates:
                 target_date_to_load = selected_fecha_param
-                print(f"DEBUG Pruebas GET: Cargando fecha específica: {target_date_to_load}")
             elif available_dates:
                  target_date_to_load = available_dates[0] # Cargar el MÁS RECIENTE por defecto
-                 print(f"DEBUG Pruebas GET: No hay fecha seleccionada, cargando por defecto la más reciente: {target_date_to_load}")
             else:
                  target_date_to_load = today_str # Preparar para HOY (primer registro)
-                 print(f"DEBUG Pruebas GET: No hay registros previos, preparando para hoy: {target_date_to_load}")
 
             # Obtener datos de postura para la fecha objetivo
             if target_date_to_load:
@@ -1988,7 +1963,6 @@ def manage_revaloracion(patient_id):
 
                     # 3. Comparar string vs string
                     if not (record_original and record_original.get('id_px') == patient_id and fecha_original_db_str == fecha_guardada):
-                         print(f"DEBUG REVAL FAIL: ID/PX Coinciden: {record_original.get('id_px') == patient_id}, Fecha DB: '{fecha_original_db_str}' != Fecha Form: '{fecha_guardada}'")
                          raise ValueError("Revaloración a editar inválida.")
                     
                     # 4. Usar el string para la comprobación de 'is_editable'
@@ -2508,10 +2482,6 @@ def manage_recibos(patient_id, recibo_id=None):
                                    # ... (el resto de tus defaults) ...
                                   )
 
-        # --- !! INICIO DE DEBUG !! ---
-        print(f"\n--- DEBUG RECIBOS (GET) ---")
-        print(f"--- 1. ID de Recibo solicitado (desde URL): {recibo_id} ---")
-        # --- !! FIN DE DEBUG !! ---
 
         patient_context = get_patient_by_id(connection, patient_id)
         if not patient_context:
@@ -2536,16 +2506,8 @@ def manage_recibos(patient_id, recibo_id=None):
             is_new_recibo_context = False # Intentamos cargar uno existente
             current_recibo_data_context = get_recibo_by_id(connection, recibo_id)
             
-            # --- !! INICIO DE DEBUG !! ---
-            print(f"--- 2. Datos devueltos por get_recibo_by_id: {'TIENE DATOS' if current_recibo_data_context else '!!!! NADA (None) !!!!'} ---")
-            if current_recibo_data_context:
-                print(f"--- 2b. Fecha en los datos: {current_recibo_data_context.get('fecha')} (Tipo: {type(current_recibo_data_context.get('fecha'))}) ---")
-            # --- !! FIN DE DEBUG !! ---
 
             if current_recibo_data_context and current_recibo_data_context.get('id_px') == patient_id:
-                # --- !! INICIO DE DEBUG !! ---
-                print(f"--- 3. VALIDACIÓN: ¡ÉXITO! El recibo pertenece al paciente. ---")
-                # --- !! FIN DE DEBUG !! ---
                 
                 current_recibo_detalles_context = get_recibo_detalles_by_id(connection, recibo_id)
                 id_dr_actual_context = current_recibo_data_context.get('id_dr', session.get('id_dr'))
@@ -2562,9 +2524,6 @@ def manage_recibos(patient_id, recibo_id=None):
                     except (ValueError, TypeError):
                         pass
             else:
-                # --- !! INICIO DE DEBUG !! ---
-                print(f"--- 3. VALIDACIÓN: ¡¡FALLO!! El recibo no se encontró o no pertenece al paciente. ---")
-                # --- !! FIN DE DEBUG !! ---
                 
                 flash("Recibo no encontrado o no pertenece a este paciente. Mostrando formulario nuevo.", "warning")
                 is_new_recibo_context = True # Falló, volvemos a modo "Nuevo"
@@ -2963,7 +2922,6 @@ def generate_plan_pdf(patient_id, id_plan):
         }
         # ----------------------------------------------------
 
-        print(f"DEBUG generate_plan_pdf: Datos para plantilla: {data_for_pdf.keys()}") # Log de las claves principales
 
         # Renderizar la plantilla HTML pasando el diccionario 'data_for_pdf' como 'data'
         html_content = render_template('plan_cuidado_pdf.html', data=data_for_pdf) 
@@ -3027,7 +2985,6 @@ def generate_plantillas_pdf(patient_id):
         postura_data = None
 
         if fecha_pruebas_solicitada:
-            print(f"DEBUG PDF Plantillas: Buscando pruebas para fecha específica: {fecha_pruebas_solicitada}")
             # Asume que get_specific_postura_by_date ya selecciona todas las columnas necesarias
             postura_data = get_specific_postura_by_date(connection, patient_id, fecha_pruebas_solicitada)
             if not postura_data:
@@ -3035,7 +2992,6 @@ def generate_plantillas_pdf(patient_id):
                  # Si no se encuentra para la fecha específica, intentamos el más reciente
                  postura_data = get_latest_postura_overall(connection, patient_id)
         else:
-            print("DEBUG PDF Plantillas: No se especificó fecha, buscando pruebas más recientes.")
             postura_data = get_latest_postura_overall(connection, patient_id)
         # -------------------------------------------------------------
 
@@ -3207,7 +3163,6 @@ def generate_recibo_pdf(patient_id, id_recibo):
         receipt_data['current_year_for_pdf'] = datetime.now().year
         receipt_data['centro_info'] = centro_info_for_pdf 
 
-        print(f"DEBUG generate_recibo_pdf: Datos para plantilla: {receipt_data}")
 
         # Renderizar la plantilla HTML específica para el PDF del recibo
         html_content = render_template('recibo_pdf_template.html', data=receipt_data)

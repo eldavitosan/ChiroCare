@@ -4,21 +4,85 @@
 
 {% block head_extra %}
 <style>
-    /* Estilos del diagrama (si se movieron de body_diagram_partial.html) */
+    /* Contenedor Base */
+    .diagrama-container {
+        position: relative;
+        width: 100%;
+        max-width: 400px;
+        /* Tamaño máximo para que no se deforme */
+        margin: 0 auto;
+    }
+
+    .diagrama-container img {
+        display: block;
+        width: 100%;
+        height: auto;
+    }
+
+    /* Capa de Puntos */
+    .diagrama-puntos-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 10;
+    }
+
+    /* Los Puntos */
+    .diagrama-punto {
+        position: absolute;
+        width: 6%;
+        /* Usamos % para que escale con la imagen */
+        padding-bottom: 6%;
+        /* Truco para mantener aspecto 1:1 (círculo) */
+        height: 0;
+        transform: translate(-50%, -50%);
+        border-radius: 50%;
+        background-color: rgba(22, 107, 201, 0.3);
+        border: 2px solid rgba(22, 107, 201, 0.7);
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    /* Punto Seleccionado (Activo) */
+    .diagrama-punto.active {
+        background-color: rgba(220, 53, 69, 0.6);
+        /* Rojo semitransparente */
+        border-color: #dc3545;
+    }
+
+    .diagrama-punto.active::after {
+        content: 'X';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        color: white;
+        font-weight: bold;
+        font-size: 12px;
+        line-height: 0;
+    }
+
+    /* Hover solo si es editable */
+    .diagrama-editor .diagrama-punto:hover {
+        background-color: rgba(22, 107, 201, 0.6);
+        transform: translate(-50%, -50%) scale(1.2);
+    }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="container-fluid mt-4">
     <div class="row">
-        
+
         <div class="col-md-3">
             {% include 'patient-sidebar.html' %}
         </div>
 
         <div class="col-md-9">
             <div class="card shadow-sm mb-4">
-                
+
                 <div class="card-header d-flex align-items-center justify-content-between">
                     <h5 class="mb-0">
                         <i class="fas fa-notes-medical fa-fw me-2"></i>Anamnesis
@@ -27,41 +91,47 @@
                 </div>
 
                 <form method="post" novalidate>
-                {{ form.csrf_token }} {{ form.diagrama_puntos(id="diagrama_puntos_hidden") }} <div class="card-body">
-                        
+                    {{ form.csrf_token }} {{ form.diagrama_puntos(id="diagrama_puntos_hidden") }} <div
+                        class="card-body">
+
                         <input type="hidden" name="id_anamnesis" value="{{ loaded_id_anamnesis or '' }}">
-                        <input type="hidden" name="fecha_cargada" value="{{ (fecha_cargada or today_date_obj).strftime('%d/%m/%Y') }}">
+                        <input type="hidden" name="fecha_cargada"
+                            value="{{ (fecha_cargada or today_date_obj).strftime('%d/%m/%Y') }}">
 
 
                         <div class="dropdown mb-3">
-                            <button class="btn btn-outline-secondary dropdown-toggle btn-sm" type="button" id="anamnesisHistoryDropdown" data-bs-toggle="dropdown" aria-expanded="false">
-                                Viendo: 
+                            <button class="btn btn-outline-secondary dropdown-toggle btn-sm" type="button"
+                                id="anamnesisHistoryDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                                Viendo:
                                 {% if loaded_id_anamnesis %}
-                                    {# Busca el registro cargado en la lista #}
-                                    {% set loaded_record = (all_records_info|selectattr('id_anamnesis', 'equalto', loaded_id_anamnesis)|first) %}
-                                    
-                                    {# Muestra la fecha (que ya viene formateada desde la BD) #}
-                                    {% if loaded_record %}
-                                        {{ loaded_record.fecha }}
-                                    {% else %}
-                                        ID {{ loaded_id_anamnesis }} (Sin fecha)
-                                    {% endif %}
+                                {# Busca el registro cargado en la lista #}
+                                {% set loaded_record = (all_records_info|selectattr('id_anamnesis', 'equalto',
+                                loaded_id_anamnesis)|first) %}
+
+                                {# Muestra la fecha (que ya viene formateada desde la BD) #}
+                                {% if loaded_record %}
+                                {{ loaded_record.fecha }}
                                 {% else %}
-                                    Nuevo ({{ today_str }})
+                                ID {{ loaded_id_anamnesis }} (Sin fecha)
+                                {% endif %}
+                                {% else %}
+                                Nuevo ({{ today_str }})
                                 {% endif %}
                             </button>
                             <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="anamnesisHistoryDropdown">
                                 <li>
-                                    <a class="dropdown-item {% if not loaded_id_anamnesis %}active{% endif %}" 
-                                    href="{{ url_for('clinical.manage_anamnesis', patient_id=patient.id_px) }}">
+                                    <a class="dropdown-item {% if not loaded_id_anamnesis %}active{% endif %}"
+                                        href="{{ url_for('clinical.manage_anamnesis', patient_id=patient.id_px) }}">
                                         + Crear Nuevo ({{ today_str }})
                                     </a>
                                 </li>
-                                <li><hr class="dropdown-divider"></li>
+                                <li>
+                                    <hr class="dropdown-divider">
+                                </li>
                                 {% for record in all_records_info %}
                                 <li>
                                     <a class="dropdown-item {% if loaded_id_anamnesis == record.id_anamnesis %}active{% endif %}"
-                                    href="{{ url_for('clinical.manage_anamnesis', patient_id=patient.id_px, selected_id=record.id_anamnesis) }}">
+                                        href="{{ url_for('clinical.manage_anamnesis', patient_id=patient.id_px, selected_id=record.id_anamnesis) }}">
                                         {{ record.fecha }}
                                     </a>
                                 </li>
@@ -70,9 +140,10 @@
                         </div>
 
                         {% if not is_editable and loaded_id_anamnesis %}
-                            <div class="alert alert-warning" role="alert">
-                              <i class="fas fa-info-circle me-2"></i>Este registro no puede ser modificado, es solo por historial.
-                            </div>
+                        <div class="alert alert-warning" role="alert">
+                            <i class="fas fa-info-circle me-2"></i>Este registro no puede ser modificado, es solo por
+                            historial.
+                        </div>
                         {% endif %}
 
                         <hr>
@@ -82,45 +153,80 @@
                             <div class="col-lg-7 col-md-6">
                                 <div class="form-section">
                                     <h5>Condiciones de Salud <small class="text-muted fw-normal">(0-10)</small></h5>
-                                     <div class="mb-3">
+                                    <div class="mb-3">
                                         {{ form.condicion1.label(class="form-label") }}
                                         <div class="d-flex condition-severity-row">
-                                            {{ form.condicion1(class="form-control condition-input", placeholder="Descripción...", readonly=(not is_editable)) }}
-                                            {{ form.calif1(class="form-control severity-input", placeholder="0-10", readonly=(not is_editable)) }}
+                                            {{ form.condicion1(class="form-control condition-input",
+                                            placeholder="Descripción...", readonly=(not is_editable)) }}
+                                            {{ form.calif1(class="form-control severity-input", placeholder="0-10",
+                                            readonly=(not is_editable)) }}
                                         </div>
-                                        {% for error in form.condicion1.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
-                                        {% for error in form.calif1.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                                        {% for error in form.condicion1.errors %}<div class="invalid-feedback d-block">
+                                            {{ error }}</div>{% endfor %}
+                                        {% for error in form.calif1.errors %}<div class="invalid-feedback d-block">{{
+                                            error }}</div>{% endfor %}
                                     </div>
                                     <div class="mb-3">
                                         {{ form.condicion2.label(class="form-label") }}
-                                         <div class="d-flex condition-severity-row">
-                                            {{ form.condicion2(class="form-control condition-input", placeholder="Descripción...", readonly=(not is_editable)) }}
-                                            {{ form.calif2(class="form-control severity-input", placeholder="0-10", readonly=(not is_editable)) }}
+                                        <div class="d-flex condition-severity-row">
+                                            {{ form.condicion2(class="form-control condition-input",
+                                            placeholder="Descripción...", readonly=(not is_editable)) }}
+                                            {{ form.calif2(class="form-control severity-input", placeholder="0-10",
+                                            readonly=(not is_editable)) }}
                                         </div>
                                     </div>
-                                     <div class="mb-3">
+                                    <div class="mb-3">
                                         {{ form.condicion3.label(class="form-label") }}
                                         <div class="d-flex condition-severity-row">
-                                            {{ form.condicion3(class="form-control condition-input", placeholder="Descripción...", readonly=(not is_editable)) }}
-                                            {{ form.calif3(class="form-control severity-input", placeholder="0-10", readonly=(not is_editable)) }}
+                                            {{ form.condicion3(class="form-control condition-input",
+                                            placeholder="Descripción...", readonly=(not is_editable)) }}
+                                            {{ form.calif3(class="form-control severity-input", placeholder="0-10",
+                                            readonly=(not is_editable)) }}
                                         </div>
                                     </div>
                                 </div>
-                                </div> 
+                            </div>
 
                             <div class="col-lg-5 col-md-6">
-                                <div class="form-section">
-                                     <h5>Diagrama Corporal <small class="text-muted fw-normal">(Haz clic en las zonas de dolor)</small></h5>
-                                     
-                                     {% include 'body_diagram_partial.html' with context %}
-                                     
-                                 </div>
+                                <div class="card shadow-sm h-100">
+                                    <div class="card-header bg-white text-center">
+                                        <h6 class="mb-0 text-success">Diagrama Corporal</h6>
+                                        <small class="text-muted">(Clic para ampliar y seleccionar)</small>
+                                    </div>
+
+                                    <div class="card-body position-relative p-2" style="cursor: pointer;"
+                                        data-bs-toggle="modal" data-bs-target="#modalDiagramaCorporal">
+
+                                        <div class="diagrama-container" id="previewDiagramContainer">
+                                            <img src="{{ url_for('static', filename='img/body_diagram.png') }}"
+                                                alt="Diagrama Corporal">
+
+                                            <div class="diagrama-puntos-overlay">
+                                                {% if DIAGRAMA_PUNTOS_COORDENADAS %}
+                                                {% for key, coords in DIAGRAMA_PUNTOS_COORDENADAS.items() %}
+                                                <div class="diagrama-punto"
+                                                    style="top: {{ coords.top }}; left: {{ coords.left }};"
+                                                    data-key="{{ key }}">
+                                                </div>
+                                                {% endfor %}
+                                                {% endif %}
+                                            </div>
+                                        </div>
+
+                                        <div
+                                            style="position:absolute; top:0; left:0; width:100%; height:100%; z-index: 20;">
+                                        </div>
+                                    </div>
+
+                                    <input type="hidden" name="diagrama_puntos" id="diagrama_puntos_hidden"
+                                        value="{{ current_data.get('diagrama_puntos', '0,') }}">
+                                </div>
                             </div>
 
                             <div class="col-12">
                                 <div class="form-section">
-                                     <h5>Detalles del Padecimiento</h5>
-                                     <div class="mb-3">
+                                    <h5>Detalles del Padecimiento</h5>
+                                    <div class="mb-3">
                                         {{ form.como_comenzo.label(class="form-label") }}
                                         <div>
                                             {# WTForms renderizará los radios automáticamente #}
@@ -132,7 +238,7 @@
                                             {% endfor %}
                                         </div>
                                     </div>
-                                     <div class="mb-3">
+                                    <div class="mb-3">
                                         {{ form.primera_vez.label(class="form-label") }}
                                         {{ form.primera_vez(class="form-control", readonly=(not is_editable)) }}
                                     </div>
@@ -150,7 +256,8 @@
                                     </div>
                                     <div class="mb-3">
                                         {{ form.actividades_afectadas.label(class="form-label") }}
-                                        {{ form.actividades_afectadas(class="form-control", readonly=(not is_editable)) }}
+                                        {{ form.actividades_afectadas(class="form-control", readonly=(not is_editable))
+                                        }}
                                     </div>
 
                                     <div class="mb-3 checkbox-group">
@@ -158,42 +265,40 @@
                                         <div>
                                             {% for subfield in form.dolor_intenso_chk %}
                                             <div class="form-check form-check-inline">
-                                                <input type="checkbox" class="form-check-input" 
-                                                    id="{{ subfield.id }}" 
-                                                    name="{{ subfield.name }}" 
-                                                    value="{{ subfield.data }}" 
-                                                    {% if subfield.data in form.dolor_intenso_chk.data %}checked{% endif %}
-                                                    {% if not is_editable %}disabled{% endif %}>
-                                                
+                                                <input type="checkbox" class="form-check-input" id="{{ subfield.id }}"
+                                                    name="{{ subfield.name }}" value="{{ subfield.data }}" {% if
+                                                    subfield.data in form.dolor_intenso_chk.data %}checked{% endif %} {%
+                                                    if not is_editable %}disabled{% endif %}>
+
                                                 <label class="form-check-label" for="{{ subfield.id }}">
                                                     {{ subfield.label.text }}
                                                 </label>
                                             </div>
                                             {% endfor %}
                                         </div>
-                                        {% for error in form.dolor_intenso_chk.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                                        {% for error in form.dolor_intenso_chk.errors %}<div
+                                            class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
                                     </div>
 
 
-                                                                        <div class="mb-3 checkbox-group">
+                                    <div class="mb-3 checkbox-group">
                                         {{ form.tipo_dolor_chk.label(class="form-label") }}
                                         <div>
                                             {% for subfield in form.tipo_dolor_chk %}
                                             <div class="form-check form-check-inline">
-                                                <input type="checkbox" class="form-check-input" 
-                                                    id="{{ subfield.id }}" 
-                                                    name="{{ subfield.name }}" 
-                                                    value="{{ subfield.data }}" 
-                                                    {% if subfield.data in form.tipo_dolor_chk.data %}checked{% endif %}
-                                                    {% if not is_editable %}disabled{% endif %}>
-                                                
+                                                <input type="checkbox" class="form-check-input" id="{{ subfield.id }}"
+                                                    name="{{ subfield.name }}" value="{{ subfield.data }}" {% if
+                                                    subfield.data in form.tipo_dolor_chk.data %}checked{% endif %} {% if
+                                                    not is_editable %}disabled{% endif %}>
+
                                                 <label class="form-check-label" for="{{ subfield.id }}">
                                                     {{ subfield.label.text }}
                                                 </label>
                                             </div>
                                             {% endfor %}
                                         </div>
-                                        {% for error in form.tipo_dolor_chk.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                                        {% for error in form.tipo_dolor_chk.errors %}<div
+                                            class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
                                     </div>
 
 
@@ -202,22 +307,58 @@
                                         <div class="mb-3">
                                             {# El valor se poblará desde el 'data' en el form #}
                                             {{ form.historia(class="form-control", rows=6) }}
-                                            <small class="form-text text-muted">Este texto se genera automáticamente al guardar.</small>
+                                            <small class="form-text text-muted">Este texto se genera automáticamente al
+                                                guardar.</small>
                                         </div>
-                                    </div> 
-                                 </div> 
-                            </div> </div> 
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
 
                         <div class="d-flex justify-content-end mt-4 border-top pt-3">
-                            <a href="{{ url_for('patient.patient_detail', patient_id=patient.id_px) }}" class="btn btn-secondary me-2">Cancelar</a>
+                            <a href="{{ url_for('patient.patient_detail', patient_id=patient.id_px) }}"
+                                class="btn btn-secondary me-2">Cancelar</a>
                             {{ form.submit(class="btn btn-primary", disabled=(not is_editable)) }}
                         </div>
-                        
+
                     </div>
-                </form> 
-            </div> 
-        </div> 
-    </div> 
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="modal fade" id="modalDiagramaCorporal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-light">
+                <h5 class="modal-title"><i class="fas fa-user-injured"></i> Selecciona las zonas de dolor</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body text-center bg-white">
+                <p class="text-muted small mb-3">Haz clic en los círculos azules para marcar dolor (Rojo = Dolor)</p>
+
+                <div class="diagrama-container diagrama-editor" id="editorDiagramContainer" style="max-width: 600px;">
+                    <img src="{{ url_for('static', filename='img/body_diagram.png') }}" alt="Diagrama Corporal Grande">
+
+                    <div class="diagrama-puntos-overlay">
+                        {% if DIAGRAMA_PUNTOS_COORDENADAS %}
+                        {% for key, coords in DIAGRAMA_PUNTOS_COORDENADAS.items() %}
+                        <div class="diagrama-punto" style="top: {{ coords.top }}; left: {{ coords.left }};"
+                            data-key="{{ key }}" title="{{ key|replace('_', ' ')|capitalize }}">
+                        </div>
+                        {% endfor %}
+                        {% endif %}
+                    </div>
+                </div>
+
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary px-4" data-bs-dismiss="modal">
+                    <i class="fas fa-check me-2"></i> Terminar Selección
+                </button>
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %}
 
@@ -225,11 +366,63 @@
 {% block scripts %}
 {{ super() }}
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Inicializar dropdown de fecha
-        
-        // El script para el diagrama corporal ya se carga desde
-        // 'body_diagram_partial.html'
+    document.addEventListener('DOMContentLoaded', function () {
+        const hiddenInput = document.getElementById('diagrama_puntos_hidden');
+        const editorContainer = document.getElementById('editorDiagramContainer');
+        const previewContainer = document.getElementById('previewDiagramContainer');
+
+        if (!hiddenInput || !editorContainer || !previewContainer) return;
+
+        // 1. Cargar estado inicial (String "0,cabeza,hombro" -> Set)
+        let initialValue = hiddenInput.value || '0,';
+        let selectedKeys = new Set(initialValue.split(',').filter(k => k && k !== '0'));
+
+        // Función para actualizar visualmente AMBOS diagramas
+        function renderPoints() {
+            // Seleccionamos todos los puntos (del preview y del editor)
+            const allPoints = document.querySelectorAll('.diagrama-punto');
+
+            allPoints.forEach(punto => {
+                const key = punto.getAttribute('data-key');
+                if (selectedKeys.has(key)) {
+                    punto.classList.add('active');
+                } else {
+                    punto.classList.remove('active');
+                }
+            });
+        }
+
+        // Función para actualizar el Input Oculto
+        function updateInput() {
+            if (selectedKeys.size === 0) {
+                hiddenInput.value = '0,';
+            } else {
+                hiddenInput.value = '0,' + Array.from(selectedKeys).join(',');
+            }
+            console.log("Diagrama actualizado:", hiddenInput.value);
+        }
+
+        // 2. Agregar eventos Click SOLO a los puntos del EDITOR (Modal)
+        const editorPoints = editorContainer.querySelectorAll('.diagrama-punto');
+
+        editorPoints.forEach(punto => {
+            punto.addEventListener('click', function (e) {
+                e.stopPropagation(); // Evitar burbujeo
+                const key = this.getAttribute('data-key');
+
+                if (selectedKeys.has(key)) {
+                    selectedKeys.delete(key); // Deseleccionar
+                } else {
+                    selectedKeys.add(key);    // Seleccionar
+                }
+
+                updateInput();
+                renderPoints(); // Refrescar visuales
+            });
+        });
+
+        // Renderizado inicial al cargar página
+        renderPoints();
     });
 </script>
 {% endblock %}

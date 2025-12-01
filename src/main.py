@@ -4,11 +4,12 @@ import google.generativeai as genai
 from groq import Groq
 from flask import Flask, render_template, request, redirect, jsonify, session, flash, url_for, Response, current_app
 from dotenv import load_dotenv
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from db.connection import connect_to_db
 from db.reports import get_resumen_dia_anterior
 from db.patients import get_patients_by_recent_followup
 load_dotenv()  # Cargar variables de entorno desde el archivo .env
+from utils.date_manager import to_frontend_str
 
 from blueprints.auth import auth_bp
 from blueprints.admin import admin_bp

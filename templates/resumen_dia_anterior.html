@@ -4,91 +4,353 @@
 
 {% block head_extra %}
 <style>
-    .patient-summary {
-        border: 1px solid #ddd;
-        border-radius: 8px;
-        margin-bottom: 20px;
+    /* Estilos personalizados para el Resumen Diario */
+    .summary-page-header {
+        background: linear-gradient(to right, #f8f9fa, #ffffff);
+        padding: 20px 0;
+        border-bottom: 1px solid #e9ecef;
+        margin-bottom: 30px;
+    }
+
+    .patient-card {
+        border: none;
+        border-radius: 12px;
+        box-shadow: 0 2px 15px rgba(0, 0, 0, 0.05);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        margin-bottom: 25px;
+        background-color: #fff;
+        overflow: hidden;
+    }
+
+    .patient-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 5px 20px rgba(0, 0, 0, 0.08);
+    }
+
+    .patient-header {
+        background-color: #f1f8ff;
+        /* Azul muy suave */
+        padding: 15px 20px;
+        border-bottom: 1px solid #e1e4e8;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    .patient-name {
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: #2c3e50;
+        text-decoration: none;
+    }
+
+    .patient-name:hover {
+        color: #0056b3;
+        text-decoration: underline;
+    }
+
+    .diagnosis-badge {
+        background-color: #e3f2fd;
+        color: #0d47a1;
+        padding: 5px 10px;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+
+    .card-body-custom {
+        padding: 20px;
+    }
+
+    /* Columnas de comparación */
+    .comparison-col {
+        height: 100%;
         padding: 15px;
-        background-color: #f9f9f9;
+        border-radius: 8px;
+        display: flex;
+        flex-direction: column;
     }
-    .patient-summary h4 {
-        margin-top: 0;
-        color: #0056b3; /* Bootstrap primary color */
+
+    .col-yesterday {
+        background-color: #fff;
+        border: 1px solid #d1e7dd;
+        border-left: 5px solid #198754;
     }
-    .summary-section {
-        margin-bottom: 10px;
-        padding-left: 15px;
-        border-left: 3px solid #eee;
+
+    .col-previous {
+        background-color: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-left: 5px solid #6c757d;
     }
-    .summary-section strong {
+
+    .section-title {
+        font-size: 0.95rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        font-weight: 700;
+        margin-bottom: 15px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .data-row {
+        margin-bottom: 12px;
+        /* Un poco más de espacio */
+        font-size: 0.95rem;
+        line-height: 1.5;
+    }
+
+    /* Estilos específicos para la LISTA DE AJUSTES */
+    .adjustment-list {
+        margin-top: 5px;
+        margin-bottom: 0;
+        padding-left: 0;
+        list-style: none;
+    }
+
+    .adjustment-item {
+        padding: 4px 8px;
+        margin-bottom: 4px;
+        border-radius: 4px;
+        background-color: rgba(0, 0, 0, 0.02);
+        border-left: 3px solid #dee2e6;
+        /* Borde gris por defecto */
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    /* Diferenciar listas de ayer vs anterior */
+    .col-yesterday .adjustment-item {
+        border-left-color: #198754;
+        /* Verde para ayer */
+        background-color: #f1fcf5;
+    }
+
+    .adjustment-item i {
+        font-size: 0.8em;
+        opacity: 0.7;
+    }
+
+    /* Iconos generales */
+    .icon-box {
+        width: 24px;
+        text-align: center;
         display: inline-block;
-        width: 100px; /* Adjust as needed */
-        color: #555;
+        color: #6c757d;
+        margin-right: 5px;
+        flex-shrink: 0;
+        /* Evita que el icono se aplaste */
+    }
+
+    /* Footer del Plan */
+    .plan-footer {
+        background-color: #fafbfc;
+        padding: 10px 20px;
+        border-top: 1px solid #edf2f7;
+        font-size: 0.9rem;
+    }
+
+    .plan-stat {
+        display: inline-flex;
+        align-items: center;
+        margin-right: 15px;
+        font-weight: 500;
     }
 </style>
 {% endblock %}
 
 {% block content %}
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2>Resumen de Atenciones - {{ fecha_resumen }}</h2>
-        <a href="{{ url_for('main') }}" class="btn btn-sm btn-outline-secondary">Volver al Dashboard</a>
+<div class="summary-page-header">
+    <div class="container d-flex justify-content-between align-items-center">
+        <div>
+            <h2 class="mb-1"><i class="fas fa-clipboard-list text-primary me-2"></i>Resumen de Atenciones</h2>
+            <p class="text-muted mb-0">Fecha del reporte: <strong>{{ fecha_resumen }}</strong></p>
+        </div>
+        <a href="{{ url_for('main') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left me-1"></i> Volver al Dashboard
+        </a>
     </div>
+</div>
 
+<div class="container">
     {% if resumen_pacientes %}
+    <div class="row">
         {% for paciente in resumen_pacientes %}
-        <div class="patient-summary">
-            <h4>
-                <a href="{{ url_for('patient.patient_detail', patient_id=paciente.id_px) }}">
-                    {{ paciente.nombre_completo }}
-                </a>
-            </h4>
-            <div class="summary-section">
-                <strong>Motivo:</strong> {{ paciente.condicion1_anamnesis or 'N/A' }}
+        <div class="col-12">
+            <div class="patient-card">
+                <div class="patient-header">
+                    <div class="d-flex align-items-center">
+                        <div class="me-3">
+                            <div class="avatar-circle bg-white text-primary border d-flex justify-content-center align-items-center"
+                                style="width:40px; height:40px; border-radius:50%; font-weight:bold;">
+                                {{ paciente.nombre_completo[:1] }}
+                            </div>
+                        </div>
+                        <div>
+                            <a href="{{ url_for('patient.patient_detail', patient_id=paciente.id_px) }}"
+                                class="patient-name">
+                                {{ paciente.nombre_completo }}
+                            </a>
+                            <div class="small text-muted">ID: #{{ paciente.id_px }}</div>
+                        </div>
+                    </div>
+                    <span class="diagnosis-badge">
+                        <i class="fas fa-stethoscope me-1"></i> {{ paciente.condicion1_anamnesis or 'Sin diagnóstico
+                        principal' }}
+                    </span>
+                </div>
+
+                <div class="card-body-custom">
+                    <div class="row g-4">
+
+                        <div class="col-md-6">
+                            <div class="comparison-col col-yesterday">
+                                {% if paciente.seguimiento_ayer %}
+                                <div class="section-title text-success">
+                                    <i class="fas fa-calendar-check"></i> Ayer ({{ paciente.seguimiento_ayer.fecha }})
+                                </div>
+
+                                <div class="data-row">
+                                    <div class="d-flex align-items-start">
+                                        <span class="icon-box mt-1"><i class="fas fa-bone text-primary"
+                                                title="Ajustes"></i></span>
+                                        <div class="w-100">
+                                            <strong>Ajustes:</strong>
+                                            {% if paciente.seguimiento_ayer.segmentos %}
+                                            <ul class="adjustment-list">
+                                                {# Convertimos la cadena "C1: AS, T2: P" en una lista real #}
+                                                {% for ajuste in paciente.seguimiento_ayer.segmentos.split(', ') %}
+                                                <li class="adjustment-item">
+                                                    <i class="fas fa-caret-right me-2 text-success"></i>{{ ajuste }}
+                                                </li>
+                                                {% endfor %}
+                                            </ul>
+                                            {% else %}
+                                            <span class="text-muted ms-1">Ninguno</span>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="data-row">
+                                    <div class="d-flex align-items-start">
+                                        <span class="icon-box mt-1"><i class="fas fa-bolt text-warning"
+                                                title="Terapias"></i></span>
+                                        <div>
+                                            <strong>Terapias:</strong>
+                                            <span class="text-dark">{{ paciente.seguimiento_ayer.terapias or 'Ninguna'
+                                                }}</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {% if paciente.seguimiento_ayer.notas %}
+                                <div class="data-row mt-auto pt-3">
+                                    <div class="p-2 bg-light rounded border border-light d-flex">
+                                        <span class="icon-box mt-1"><i
+                                                class="fas fa-comment-medical text-info"></i></span>
+                                        <small class="text-secondary fst-italic">"{{ paciente.seguimiento_ayer.notas
+                                            }}"</small>
+                                    </div>
+                                </div>
+                                {% endif %}
+
+                                {% else %}
+                                <div class="text-center py-5 text-muted">
+                                    <i class="fas fa-exclamation-circle fa-2x mb-2 opacity-50"></i><br>
+                                    No hay datos registrados.
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="comparison-col col-previous">
+                                {% if paciente.seguimiento_anterior %}
+                                <div class="section-title text-secondary">
+                                    <i class="fas fa-history"></i> Visita Previa ({{ paciente.seguimiento_anterior.fecha
+                                    }})
+                                </div>
+
+                                <div class="data-row">
+                                    <div class="d-flex align-items-start">
+                                        <span class="icon-box mt-1"><i class="fas fa-bone text-muted"
+                                                title="Ajustes Previos"></i></span>
+                                        <div class="w-100">
+                                            <strong>Ajustes:</strong>
+                                            {% if paciente.seguimiento_anterior.segmentos %}
+                                            <ul class="adjustment-list">
+                                                {% for ajuste in paciente.seguimiento_anterior.segmentos.split(', ') %}
+                                                <li class="adjustment-item text-muted">
+                                                    <i class="fas fa-angle-right me-2"></i>{{ ajuste }}
+                                                </li>
+                                                {% endfor %}
+                                            </ul>
+                                            {% else %}
+                                            <span class="text-muted ms-1">Ninguno</span>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="data-row text-muted">
+                                    <div class="d-flex align-items-start">
+                                        <span class="icon-box mt-1"><i class="fas fa-bolt text-muted"></i></span>
+                                        <div>
+                                            <strong>Terapias:</strong>
+                                            <span>{{ paciente.seguimiento_anterior.terapias or 'Ninguna' }}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% else %}
+                                <div class="d-flex align-items-center justify-content-center h-100 text-muted small">
+                                    <em>Sin registro anterior inmediato.</em>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {% if paciente.plan_activo %}
+                <div class="plan-footer d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <div class="d-flex align-items-center">
+                        <i class="fas fa-file-medical-alt text-primary me-2"></i>
+                        <span class="fw-bold text-primary me-2">Plan Activo:</span>
+                        <span>{{ paciente.plan_activo.nombre }}</span>
+                    </div>
+
+                    <div class="d-flex gap-3">
+                        {% if not paciente.plan_activo.completado %}
+                        <div class="plan-stat" title="Ajustes Quiroprácticos Restantes">
+                            <span class="badge bg-primary rounded-pill">QP</span>
+                            <strong>{{ paciente.plan_activo.qp_restantes }}</strong> <span
+                                class="small text-muted ms-1">restantes</span>
+                        </div>
+                        <div class="plan-stat" title="Terapias Físicas Restantes">
+                            <span class="badge bg-warning text-dark rounded-pill">TF</span>
+                            <strong>{{ paciente.plan_activo.tf_restantes }}</strong> <span
+                                class="small text-muted ms-1">restantes</span>
+                        </div>
+                        {% else %}
+                        <span class="badge bg-success"><i class="fas fa-check-circle me-1"></i>Completado</span>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
             </div>
-
-            {% if paciente.seguimiento_ayer %}
-                <div class="summary-section">
-                    <h5>Ayer ({{ paciente.seguimiento_ayer.fecha }})</h5>
-                    <p class="mb-1"><strong>Ajustes:</strong> {{ paciente.seguimiento_ayer.segmentos or 'N/A' }}</p>
-                    <p class="mb-1"><strong>Terapias:</strong> {{ paciente.seguimiento_ayer.terapias or 'N/A' }}</p>
-                    <p class="mb-0"><strong>Notas:</strong> {{ paciente.seguimiento_ayer.notas or 'N/A' }}</p>
-                </div>
-            {% else %}
-                <div class="summary-section">
-                    <p class="text-muted"><em>No se encontraron datos del seguimiento de ayer.</em></p>
-                </div>
-            {% endif %}
-
-            {% if paciente.seguimiento_anterior %}
-                <div class="summary-section">
-                    <h5>Visita Anterior ({{ paciente.seguimiento_anterior.fecha }})</h5>
-                    <p class="mb-1"><strong>Ajustes:</strong> {{ paciente.seguimiento_anterior.segmentos or 'N/A' }}</p>
-                    <p class="mb-0"><strong>Terapias:</strong> {{ paciente.seguimiento_anterior.terapias or 'N/A' }}</p>
-                </div>
-            {% else %}
-                <div class="summary-section">
-                    <p class="text-muted small"><em>Sin registro de seguimiento anterior inmediato.</em></p>
-                </div>
-            {% endif %}
-
-            {% if paciente.plan_activo %}
-                <div class="summary-section mt-2 pt-2 border-top">
-                    <h6 class="mb-1 small text-primary">Plan de Cuidado Activo:</h6>
-                    <p class="mb-1"><strong>Plan:</strong> {{ paciente.plan_activo.nombre }}</p>
-                    {% if not paciente.plan_activo.completado %}
-                     <p class="mb-0">
-                         <strong>Sesiones Restantes:</strong>
-                         QP: {{ paciente.plan_activo.qp_restantes }} / TF: {{ paciente.plan_activo.tf_restantes }}
-                     </p>
-            {% endif %}
         </div>
-        {% else %}
-                 {% endif %}
         {% endfor %}
+    </div>
     {% else %}
-        <div class="alert alert-info" role="alert">
-            No se registraron seguimientos para el día {{ fecha_resumen }}.
-        </div>
+    <div class="alert alert-info shadow-sm p-4 text-center" role="alert">
+        <i class="fas fa-info-circle fa-2x mb-3 text-info"></i><br>
+        <h4>Sin Actividad Registrada</h4>
+        <p>No se encontraron seguimientos para el día {{ fecha_resumen }}.</p>
+    </div>
     {% endif %}
+</div>
 
 {% endblock %}

@@ -294,8 +294,7 @@ def get_resumen_dia_anterior(connection):
         terapias = {str(t['id_prod']): t['nombre'] for t in get_terapias_fisicas(connection)}
         cursor = connection.cursor(dictionary=True)
         
-        # 1. Encontrar última fecha con datos (Optimizado)
-        # Busca en los últimos 30 días para no escanear toda la tabla
+        # 1. Encontrar última fecha con datos
         cursor.execute("SELECT MAX(fecha) as ultima_fecha FROM quiropractico WHERE fecha >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)")
         res = cursor.fetchone()
         
@@ -317,21 +316,65 @@ def get_resumen_dia_anterior(connection):
             anam = get_latest_anamnesis(connection, pid)
             if anam: p_info['condicion1_anamnesis'] = anam.get('condicion1', 'N/A')
             
-            # Últimos 2 seguimientos (ayer y anteayer clínico)
+            # --- CORRECCIÓN AQUÍ: Ampliamos la lista de segmentos en el SQL para que no salgan vacíos ---
             cursor.execute("""
                 SELECT fecha, notas, terapia, id_plan_cuidado_asociado,
-                CONCAT_WS(', ', NULLIF(occipital,''), NULLIF(atlas,''), NULLIF(l5,''), NULLIF(sacro,''), NULLIF(iliaco_d,'')) as segmentos_resumidos
+                CONCAT_WS(', ', 
+                    IF(occipital != '', CONCAT('Occipital: ', occipital), NULL),
+                    IF(atlas != '', CONCAT('Atlas: ', atlas), NULL),
+                    IF(axis != '', CONCAT('Axis: ', axis), NULL),
+                    IF(c3 != '', CONCAT('C3: ', c3), NULL),
+                    IF(c4 != '', CONCAT('C4: ', c4), NULL),
+                    IF(c5 != '', CONCAT('C5: ', c5), NULL),
+                    IF(c6 != '', CONCAT('C6: ', c6), NULL),
+                    IF(c7 != '', CONCAT('C7: ', c7), NULL),
+                    IF(t1 != '', CONCAT('T1: ', t1), NULL),
+                    IF(t2 != '', CONCAT('T2: ', t2), NULL),
+                    IF(t3 != '', CONCAT('T3: ', t3), NULL),
+                    IF(t4 != '', CONCAT('T4: ', t4), NULL),
+                    IF(t5 != '', CONCAT('T5: ', t5), NULL),
+                    IF(t6 != '', CONCAT('T6: ', t6), NULL),
+                    IF(t7 != '', CONCAT('T7: ', t7), NULL),
+                    IF(t8 != '', CONCAT('T8: ', t8), NULL),
+                    IF(t9 != '', CONCAT('T9: ', t9), NULL),
+                    IF(t10 != '', CONCAT('T10: ', t10), NULL),
+                    IF(t11 != '', CONCAT('T11: ', t11), NULL),
+                    IF(t12 != '', CONCAT('T12: ', t12), NULL),
+                    IF(l1 != '', CONCAT('L1: ', l1), NULL),
+                    IF(l2 != '', CONCAT('L2: ', l2), NULL),
+                    IF(l3 != '', CONCAT('L3: ', l3), NULL),
+                    IF(l4 != '', CONCAT('L4: ', l4), NULL),
+                    IF(l5 != '', CONCAT('L5: ', l5), NULL),
+                    IF(sacro != '', CONCAT('Sacro: ', sacro), NULL),
+                    IF(iliaco_d != '', CONCAT('Ilíaco Der: ', iliaco_d), NULL),
+                    IF(iliaco_i != '', CONCAT('Ilíaco Izq: ', iliaco_i), NULL),
+                    IF(coxis != '', CONCAT('Coxis: ', coxis), NULL)
+                ) as segmentos_resumidos
                 FROM quiropractico WHERE id_px=%s ORDER BY fecha DESC, id_seguimiento DESC LIMIT 2
             """, (pid,))
             segs = cursor.fetchall()
             
             if segs:
+                # --- 1. Procesar AYER (segs[0]) ---
                 s_ayer = segs[0]
                 t_ids = [tid for tid in s_ayer.get('terapia', '0,').split(',') if tid and tid != '0']
                 t_txt = ', '.join([terapias.get(tid, tid) for tid in t_ids]) or 'Ninguna'
                 
                 f_str = s_ayer['fecha'].strftime('%d/%m/%Y') if isinstance(s_ayer['fecha'], date) else str(s_ayer['fecha'])
                 p_info['seguimiento_ayer'] = {'fecha': f_str, 'segmentos': s_ayer['segmentos_resumidos'], 'terapias': t_txt, 'notas': s_ayer.get('notas')}
+
+                # --- 2. Procesar ANTERIOR (segs[1]) - ESTO FALTABA ---
+                if len(segs) > 1:
+                    s_prev = segs[1]
+                    t_ids_prev = [tid for tid in s_prev.get('terapia', '0,').split(',') if tid and tid != '0']
+                    t_txt_prev = ', '.join([terapias.get(tid, tid) for tid in t_ids_prev]) or 'Ninguna'
+                    f_str_prev = s_prev['fecha'].strftime('%d/%m/%Y') if isinstance(s_prev['fecha'], date) else str(s_prev['fecha'])
+                    
+                    p_info['seguimiento_anterior'] = {
+                        'fecha': f_str_prev,
+                        'segmentos': s_prev['segmentos_resumidos'],
+                        'terapias': t_txt_prev
+                    }
                 
                 # Estado del Plan
                 id_plan = s_ayer.get('id_plan_cuidado_asociado')
@@ -358,6 +401,7 @@ def get_resumen_dia_anterior(connection):
         return []
     finally: 
         if cursor: cursor.close()
+
 
 def count_seguimientos_hoy(connection, fecha_hoy_str):
     """

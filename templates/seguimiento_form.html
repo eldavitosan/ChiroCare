@@ -218,6 +218,13 @@
 
                     <hr>
 
+                    <div class="d-flex justify-content-end mb-2">
+                        <button type="button" class="btn btn-sm btn-outline-primary" id="btnCopiarAnterior"
+                            title="Rellenar con los datos de la última visita">
+                            <i class="fas fa-copy me-1"></i> Copiar Visita Anterior
+                        </button>
+                    </div>
+
                     <div class="row">
 
                         <div class="col-md-4 d-flex justify-content-center align-items-start">
@@ -412,7 +419,7 @@
                             <div class="card shadow-sm mb-3">
                                 <div class="card-header bg-white fw-bold">Notas de la Visita</div>
                                 <div class="card-body p-2">
-                                    <textarea name="notas" class="form-control" rows="3"
+                                    <textarea id="notas" name="notas" class="form-control" rows="3"
                                         placeholder="Añada notas de esta visita aqui...">{{ current_data.get('notas', '') if current_data else '' }}</textarea>
                                 </div>
                             </div>
@@ -509,75 +516,11 @@
 {% block scripts %}
 {{ super() }}
 <script>
-    document.addEventListener('DOMContentLoaded', function () {
-        // --- 1. ZOOM DE IMÁGENES ---
-        enableImageZoom();
-        function enableImageZoom() {
-            const images = document.querySelectorAll('.zoomable-image');
-            images.forEach(img => {
-                img.addEventListener('click', handleImageClick);
-            });
-        }
-        function handleImageClick(event) {
-            const clickedImage = event.target;
-            const overlay = document.createElement('div');
-            overlay.className = 'lightbox-overlay';
-            const largeImage = document.createElement('img');
-            largeImage.className = 'lightbox-image';
-            largeImage.src = clickedImage.src;
-            overlay.appendChild(largeImage);
-            document.body.appendChild(overlay);
-            overlay.addEventListener('click', () => {
-                document.body.removeChild(overlay);
-            }, { once: true });
-        }
+    // ==========================================
+    // FUNCIONES GLOBALES (Accesibles desde HTML)
+    // ==========================================
 
-        // --- 2. LÓGICA DEL ESPINOGRAMA ---
-        const vertebraGroups = document.querySelectorAll('.vertebra-group');
-        const emptyStateMsg = document.getElementById('emptyStateMsg');
-
-        function updateEmptyState() {
-            const anyVisible = document.querySelectorAll('.adjustment-input-group:not(.d-none)').length > 0;
-            if (anyVisible) {
-                emptyStateMsg.classList.add('d-none');
-            } else {
-                emptyStateMsg.classList.remove('d-none');
-            }
-        }
-
-        vertebraGroups.forEach(group => {
-            const targetName = group.getAttribute('data-target');
-            const container = document.getElementById('container_' + targetName);
-            const input = document.getElementById('input_' + targetName);
-            const path = group.querySelector('.vertebra-path');
-
-            // Cargar estado inicial
-            if (input && input.value.trim() !== '') {
-                path.classList.add('selected');
-            }
-
-            // Click Handler
-            group.addEventListener('click', function () {
-                path.classList.toggle('selected');
-                const isSelected = path.classList.contains('selected');
-
-                if (isSelected) {
-                    container.classList.remove('d-none');
-                    updateEmptyState();
-                    setTimeout(() => input.focus(), 100);
-                } else {
-                    container.classList.add('d-none');
-                    input.value = '';
-                    updateEmptyState();
-                }
-            });
-        });
-
-        // Verificar estado inicial al cargar
-        updateEmptyState();
-    });
-
-    // --- 3. FUNCIÓN PARA QUITAR SEGMENTO DESDE EL PANEL ---
+    // Función llamada por el botón "X" en cada segmento
     function removeSegment(segName) {
         const container = document.getElementById('container_' + segName);
         const input = document.getElementById('input_' + segName);
@@ -588,10 +531,161 @@
         if (input) input.value = '';
         if (path) path.classList.remove('selected');
 
-        // Necesitamos acceder a la función updateEmptyState, o replicar su lógica
-        const emptyStateMsg = document.getElementById('emptyStateMsg');
-        const anyVisible = document.querySelectorAll('.adjustment-input-group:not(.d-none)').length > 0;
-        if (!anyVisible) emptyStateMsg.classList.remove('d-none');
+        // Actualizar estado de "mensaje vacío"
+        checkEmptyStateGlobal();
     }
+
+    // Helper auxiliar para verificar si hay inputs visibles
+    function checkEmptyStateGlobal() {
+        const emptyStateMsg = document.getElementById('emptyStateMsg');
+        if (emptyStateMsg) {
+            const anyVisible = document.querySelectorAll('.adjustment-input-group:not(.d-none)').length > 0;
+            if (anyVisible) {
+                emptyStateMsg.classList.add('d-none');
+            } else {
+                emptyStateMsg.classList.remove('d-none');
+            }
+        }
+    }
+
+    // ==========================================
+    // INICIALIZACIÓN AL CARGAR LA PÁGINA
+    // ==========================================
+    document.addEventListener('DOMContentLoaded', function () {
+
+        // --- 1. ZOOM DE IMÁGENES (Lightbox) ---
+        const images = document.querySelectorAll('.zoomable-image');
+        if (images.length > 0) {
+            images.forEach(img => {
+                img.addEventListener('click', function (e) {
+                    const overlay = document.createElement('div');
+                    overlay.className = 'lightbox-overlay';
+                    const largeImage = document.createElement('img');
+                    largeImage.className = 'lightbox-image';
+                    largeImage.src = e.target.src;
+                    overlay.appendChild(largeImage);
+                    document.body.appendChild(overlay);
+                    overlay.addEventListener('click', () => document.body.removeChild(overlay), { once: true });
+                });
+            });
+        }
+
+        // --- 2. LÓGICA DEL ESPINOGRAMA ---
+        const vertebraGroups = document.querySelectorAll('.vertebra-group');
+
+        if (vertebraGroups.length > 0) {
+            vertebraGroups.forEach(group => {
+                const targetName = group.getAttribute('data-target');
+                const container = document.getElementById('container_' + targetName);
+                const input = document.getElementById('input_' + targetName);
+                const path = group.querySelector('.vertebra-path');
+
+                // Cargar estado inicial (si ya hay datos)
+                if (input && input.value.trim() !== '') {
+                    if (path) path.classList.add('selected');
+                    if (container) container.classList.remove('d-none');
+                }
+
+                // Click en la vértebra
+                group.addEventListener('click', function () {
+                    if (path) path.classList.toggle('selected');
+                    const isSelected = path ? path.classList.contains('selected') : false;
+
+                    if (isSelected) {
+                        if (container) container.classList.remove('d-none');
+                        checkEmptyStateGlobal();
+                        if (input) setTimeout(() => input.focus(), 100);
+                    } else {
+                        if (container) container.classList.add('d-none');
+                        if (input) input.value = '';
+                        checkEmptyStateGlobal();
+                    }
+                });
+            });
+        }
+
+        // Verificación inicial
+        checkEmptyStateGlobal();
+
+
+        // --- 3. BOTÓN "COPIAR VISITA ANTERIOR" ---
+        const btnCopiar = document.getElementById('btnCopiarAnterior');
+        if (btnCopiar) {
+            btnCopiar.addEventListener('click', function () {
+                const originalText = btnCopiar.innerHTML;
+                btnCopiar.disabled = true;
+                btnCopiar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Copiando...';
+
+                // URL generada por Flask
+                const url = "{{ url_for('clinical.get_ultimo_seguimiento_api', patient_id=patient.id_px) }}";
+
+                fetch(url)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            // Lista de segmentos
+                            const campos = [
+                                'occipital', 'atlas', 'axis', 'c3', 'c4', 'c5', 'c6', 'c7',
+                                't1', 't2', 't3', 't4', 't5', 't6', 't7', 't8', 't9', 't10', 't11', 't12',
+                                'l1', 'l2', 'l3', 'l4', 'l5', 'sacro', 'coxis', 'iliaco_d', 'iliaco_i', 'pubis'
+                            ];
+
+                            // Rellenar Ajustes
+                            campos.forEach(id => {
+                                const input = document.getElementById('input_' + id);
+                                if (data[id] && data[id] !== '') {
+                                    if (input) input.value = data[id];
+
+                                    // Activar visualmente
+                                    const container = document.getElementById('container_' + id);
+                                    const group = document.querySelector(`.vertebra-group[data-target="${id}"]`);
+                                    const path = group ? group.querySelector('.vertebra-path') : null;
+
+                                    if (container) container.classList.remove('d-none');
+                                    if (path) path.classList.add('selected');
+                                } else {
+                                    // Limpiar si estaba vacío
+                                    if (input) input.value = '';
+                                    const container = document.getElementById('container_' + id);
+                                    const group = document.querySelector(`.vertebra-group[data-target="${id}"]`);
+                                    const path = group ? group.querySelector('.vertebra-path') : null;
+
+                                    if (container) container.classList.add('d-none');
+                                    if (path) path.classList.remove('selected');
+                                }
+                            });
+
+                            checkEmptyStateGlobal();
+
+                            // Rellenar Notas
+                            const notasInput = document.getElementById('notas');
+                            if (notasInput) {
+                                notasInput.value = data.notas || '';
+                            }
+
+                            // Marcar Terapias
+                            document.querySelectorAll('input[name="terapia_chk"]').forEach(chk => chk.checked = false);
+                            if (data.terapia) {
+                                const terapiaIds = data.terapia.split(',').filter(t => t !== '0' && t !== '');
+                                terapiaIds.forEach(tid => {
+                                    const chk = document.querySelector(`input[name="terapia_chk"][value="${tid}"]`);
+                                    if (chk) chk.checked = true;
+                                });
+                            }
+                        } else {
+                            alert('Aviso: ' + data.message);
+                        }
+                    })
+                    .catch(err => {
+                        console.error('Error al copiar:', err);
+                        alert('Error al intentar copiar los datos.');
+                    })
+                    .finally(() => {
+                        btnCopiar.disabled = false;
+                        btnCopiar.innerHTML = originalText;
+                    });
+            });
+        }
+    });
 </script>
 {% endblock %}

@@ -166,3 +166,64 @@ def add_general_note(connection, id_px, notas_text):
     except Error: raise
     finally: 
         if cursor: cursor.close()
+
+
+def get_patient_history_timeline(connection, patient_id):
+    """Obtiene el historial clínico completo formateado para la línea de tiempo."""
+    cursor = None
+    try:
+        cursor = connection.cursor(dictionary=True)
+        query = """
+            SELECT q.id_seguimiento, q.fecha, q.notas, q.terapia, 
+                   COALESCE(d.nombre, 'Dr. General') as nombre_doctor,
+                   CONCAT_WS(', ', 
+                        IF(q.occipital != '', CONCAT('Occipital: ', q.occipital), NULL),
+                        IF(q.atlas != '', CONCAT('Atlas: ', q.atlas), NULL),
+                        IF(q.axis != '', CONCAT('Axis: ', q.axis), NULL),
+                        IF(q.c3 != '', CONCAT('C3: ', q.c3), NULL),
+                        IF(q.c4 != '', CONCAT('C4: ', q.c4), NULL),
+                        IF(q.c5 != '', CONCAT('C5: ', q.c5), NULL),
+                        IF(q.c6 != '', CONCAT('C6: ', q.c6), NULL),
+                        IF(q.c7 != '', CONCAT('C7: ', q.c7), NULL),
+                        IF(q.t1 != '', CONCAT('T1: ', q.t1), NULL),
+                        IF(q.t2 != '', CONCAT('T2: ', q.t2), NULL),
+                        IF(q.t3 != '', CONCAT('T3: ', q.t3), NULL),
+                        IF(q.t4 != '', CONCAT('T4: ', q.t4), NULL),
+                        IF(q.t5 != '', CONCAT('T5: ', q.t5), NULL),
+                        IF(q.t6 != '', CONCAT('T6: ', q.t6), NULL),
+                        IF(q.t7 != '', CONCAT('T7: ', q.t7), NULL),
+                        IF(q.t8 != '', CONCAT('T8: ', q.t8), NULL),
+                        IF(q.t9 != '', CONCAT('T9: ', q.t9), NULL),
+                        IF(q.t10 != '', CONCAT('T10: ', q.t10), NULL),
+                        IF(q.t11 != '', CONCAT('T11: ', q.t11), NULL),
+                        IF(q.t12 != '', CONCAT('T12: ', q.t12), NULL),
+                        IF(q.l1 != '', CONCAT('L1: ', q.l1), NULL),
+                        IF(q.l2 != '', CONCAT('L2: ', q.l2), NULL),
+                        IF(q.l3 != '', CONCAT('L3: ', q.l3), NULL),
+                        IF(q.l4 != '', CONCAT('L4: ', q.l4), NULL),
+                        IF(q.l5 != '', CONCAT('L5: ', q.l5), NULL),
+                        IF(q.sacro != '', CONCAT('Sacro: ', q.sacro), NULL),
+                        IF(q.coxis != '', CONCAT('Coxis: ', q.coxis), NULL),
+                        IF(q.iliaco_d != '', CONCAT('Ilíaco Der: ', q.iliaco_d), NULL),
+                        IF(q.iliaco_i != '', CONCAT('Ilíaco Izq: ', q.iliaco_i), NULL),
+                        IF(q.pubis != '', CONCAT('Pubis: ', q.pubis), NULL)
+                   ) as segmentos_formateados
+            FROM quiropractico q
+            LEFT JOIN dr d ON q.id_dr = d.id_dr
+            WHERE q.id_px = %s
+            ORDER BY q.fecha DESC, q.id_seguimiento DESC
+        """
+        cursor.execute(query, (patient_id,))
+        results = cursor.fetchall()
+        
+        # Formatear fecha para que se vea bonita
+        for row in results:
+            if row['fecha']:
+                row['fecha_str'] = row['fecha'].strftime('%d/%m/%Y')
+        
+        return results
+    except Exception as e:
+        print(f"Error obteniendo historial timeline: {e}")
+        return []
+    finally:
+        if cursor: cursor.close()

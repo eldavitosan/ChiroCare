@@ -3565,3 +3565,59 @@ def get_latest_antecedente_on_or_before_date(connection, patient_id, target_date
     except (ValueError, Error): return None
     finally: 
         if cursor: cursor.close()
+
+# --- Agregar en src/blueprints/clinical.py ---
+
+@clinical_bp.route('/api/get_ultimo_seguimiento')
+@login_required
+def get_ultimo_seguimiento_api(patient_id):
+    """
+    Devuelve los detalles del último seguimiento registrado para copiarlo.
+    """
+    connection = None
+    try:
+        connection = connect_to_db()
+        # 1. Obtener lista de seguimientos (ya viene ordenada por fecha DESC)
+        summary = get_seguimiento_summary(connection, patient_id)
+        
+        if not summary:
+            return jsonify({'success': False, 'message': 'No hay seguimientos previos.'})
+            
+        # 2. Tomar el ID del más reciente (el primero de la lista)
+        last_id = summary[0]['id_seguimiento']
+        
+        # 3. Obtener el detalle completo
+        details = get_specific_seguimiento(connection, last_id)
+        
+        if details:
+            # Limpiamos datos que no queremos copiar (como la fecha o el ID)
+            datos_a_copiar = {
+                'success': True,
+                # Segmentos vertebrales
+                'occipital': details.get('occipital'),
+                'atlas': details.get('atlas'),
+                'axis': details.get('axis'),
+                'c3': details.get('c3'), 'c4': details.get('c4'), 'c5': details.get('c5'),
+                'c6': details.get('c6'), 'c7': details.get('c7'),
+                't1': details.get('t1'), 't2': details.get('t2'), 't3': details.get('t3'),
+                't4': details.get('t4'), 't5': details.get('t5'), 't6': details.get('t6'),
+                't7': details.get('t7'), 't8': details.get('t8'), 't9': details.get('t9'),
+                't10': details.get('t10'), 't11': details.get('t11'), 't12': details.get('t12'),
+                'l1': details.get('l1'), 'l2': details.get('l2'), 'l3': details.get('l3'),
+                'l4': details.get('l4'), 'l5': details.get('l5'),
+                'sacro': details.get('sacro'), 'coxis': details.get('coxis'),
+                'iliaco_d': details.get('iliaco_d'), 'iliaco_i': details.get('iliaco_i'),
+                'pubis': details.get('pubis'),
+                # Otros datos
+                'notas': details.get('notas'),
+                'terapia': details.get('terapia', '0,') # Viene como string "1,3,5"
+            }
+            return jsonify(datos_a_copiar)
+        else:
+            return jsonify({'success': False, 'message': 'Error al leer el detalle del último seguimiento.'})
+
+    except Exception as e:
+        print(f"Error API copiar seguimiento: {e}")
+        return jsonify({'success': False, 'message': 'Error interno del servidor.'})
+    finally:
+        if connection: connection.close()

@@ -10,7 +10,8 @@ from forms import PatientForm
 from db.connection import connect_to_db
 from db.patients import (
     add_patient, get_patient_by_id, search_patients_by_name,
-    update_patient_details, get_unseen_notes_for_patient
+    update_patient_details, get_unseen_notes_for_patient,
+    get_patient_history_timeline
 )
 from db.clinical import (
     get_specific_antecedente_by_date, get_postura_summary
@@ -121,6 +122,7 @@ def patient_detail(patient_id): # <--- SINGULAR
         todays_antecedente_id = todays_antecedente.get('id_antecedente') if todays_antecedente else None
 
         unseen_notes_list = get_unseen_notes_for_patient(connection, patient_id)
+        historial_clinico = get_patient_history_timeline(connection, patient_id)
 
         # RENDERIZA EL ARCHIVO SINGULAR
         return render_template('patient_detail.html',
@@ -130,7 +132,8 @@ def patient_detail(patient_id): # <--- SINGULAR
                                active_plan_info=active_plan_info,      
                                adicionales_status=adicionales_status,
                                num_postura_records=num_postura_records,
-                               unseen_notes=unseen_notes_list
+                               unseen_notes=unseen_notes_list,
+                               historial=historial_clinico
                                )
 
     except Exception as e:

@@ -4,6 +4,48 @@
 
 {% block head_extra %}
 <style>
+    /* --- ESTILOS PARA ACORDEÓN DE HISTORIAL (NUEVO) --- */
+    .timeline-header {
+        cursor: pointer;
+        /* Manita al pasar el mouse */
+        transition: background-color 0.2s;
+    }
+
+    .timeline-header:hover {
+        background-color: #f8f9fa;
+        /* Sutil cambio de color al pasar el mouse */
+    }
+
+    .timeline-details {
+        display: none;
+        /* Oculto por defecto */
+        border-top: 1px dashed #e9ecef;
+        margin-top: 10px;
+        padding-top: 10px;
+        animation: slideDown 0.3s ease-out;
+    }
+
+    .chevron-icon {
+        transition: transform 0.3s;
+    }
+
+    /* Clase para girar la flecha cuando está abierto */
+    .rotate-180 {
+        transform: rotate(180deg);
+    }
+
+    @keyframes slideDown {
+        from {
+            opacity: 0;
+            transform: translateY(-10px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
     /* --- ESTILOS DE PESTAÑAS (NUEVO) --- */
     .tab-nav {
         overflow: hidden;
@@ -365,30 +407,36 @@
             <div class="timeline-marker"></div>
 
             <div class="card timeline-card">
-                <div class="card-body py-3">
-                    <div class="d-flex justify-content-between align-items-start">
+                <div class="card-body py-2 timeline-header" onclick="toggleHistory(this)">
+                    <div class="d-flex justify-content-between align-items-center">
                         <div>
-                            <span class="timeline-date"><i class="far fa-calendar-alt me-1"></i> {{ visita.fecha_str
-                                }}</span>
-                            <h6 class="card-title text-primary mb-1">
+                            <span class="timeline-date">
+                                <i class="far fa-calendar-alt me-1"></i> {{ visita.fecha_str }}
+                            </span>
+                            <h6 class="card-title text-primary mb-0 mt-1">
                                 <i class="fas fa-user-md me-1"></i> {{ visita.nombre_doctor }}
                             </h6>
                         </div>
-                        <a href="{{ url_for('clinical.manage_seguimiento', patient_id=patient.id_px, selected_id=visita.id_seguimiento) }}"
-                            class="btn btn-sm btn-outline-secondary">
-                            Ver Detalle <i class="fas fa-arrow-right ms-1"></i>
-                        </a>
+
+                        <div class="d-flex align-items-center">
+                            <i class="fas fa-chevron-down text-muted chevron-icon me-3"></i>
+
+                            <a href="{{ url_for('clinical.manage_seguimiento', patient_id=patient.id_px, selected_id=visita.id_seguimiento) }}"
+                                class="btn btn-sm btn-outline-secondary" onclick="event.stopPropagation();">
+                                <i class="fas fa-external-link-alt"></i>
+                            </a>
+                        </div>
                     </div>
+                </div>
 
-                    <div class="mt-3">
-
+                <div class="card-body pt-0 timeline-details">
+                    <div class="mt-2">
                         {% if visita.segmentos_formateados %}
                         <div class="mb-3">
                             <strong class="text-dark d-block mb-1">
-                                <i class="fas fa-bone me-1 text-secondary"></i> Ajustes Realizados:
+                                <i class="fas fa-bone me-1 text-secondary"></i> Ajustes:
                             </strong>
                             <ul class="adjustment-list">
-                                {# Convertimos la cadena "Atlas: AS, T1: P" en una lista real #}
                                 {% for seg in visita.segmentos_formateados.split(', ') %}
                                 <li class="adjustment-item">
                                     <i class="fas fa-check-circle"></i> {{ seg }}
@@ -401,9 +449,6 @@
                         {% if visita.terapia and visita.terapia != '0,' and visita.terapia != '' %}
                         <p class="mb-2 text-muted small">
                             <strong><i class="fas fa-bolt text-warning me-1"></i> Terapias:</strong>
-                            {# Aquí podrías necesitar formatear los IDs de terapia a nombres si no lo hiciste en la
-                            consulta
-                            #}
                             {{ visita.terapia }}
                         </p>
                         {% endif %}
@@ -600,6 +645,24 @@
         // Mostrar la pestaña actual y activar botón
         document.getElementById(tabName).style.display = "block";
         evt.currentTarget.className += " active";
+    }
+
+    // FUNCIÓN PARA ACORDEÓN HISTORIAL
+    function toggleHistory(headerElement) {
+        // 1. Encontrar el contenedor hermano que tiene los detalles
+        // La estructura es: header -> (hermano) detalles
+        var card = headerElement.parentElement;
+        var details = card.querySelector('.timeline-details');
+        var icon = headerElement.querySelector('.chevron-icon');
+
+        // 2. Alternar visibilidad
+        if (details.style.display === "block") {
+            details.style.display = "none";
+            icon.classList.remove("rotate-180");
+        } else {
+            details.style.display = "block";
+            icon.classList.add("rotate-180");
+        }
     }
 
     document.addEventListener('DOMContentLoaded', function () {

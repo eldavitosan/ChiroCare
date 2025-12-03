@@ -5,7 +5,7 @@ from groq import Groq
 from flask import Flask, render_template, request, redirect, jsonify, session, flash, url_for, Response, current_app
 from dotenv import load_dotenv
 from datetime import datetime, date, timedelta
-from db.connection import connect_to_db
+from db.connection import connect_to_db,get_db_cursor
 from db.reports import get_resumen_dia_anterior
 from db.patients import get_patients_by_recent_followup
 load_dotenv()  # Cargar variables de entorno desde el archivo .env
@@ -139,50 +139,26 @@ def index():
 @app.route("/main")
 @login_required 
 def main():
-    connection = None
-    ##recent_patients_list = [] # Lista vacía por defecto
     try:
-        # Obtener nombre de usuario para saludo (como antes)
         nombre_usuario = session.get('nombre', session.get('usuario', 'Usuario'))
+        patients_list_for_template = []
 
-        # --- Obtener pacientes recientes ---
-        connection = connect_to_db()
-        ##if connection:
-        ##    recent_patients_list = get_recent_patients(connection, limit=5) # Obtener los últimos 5
-        ##    connection.close() # Cerrar conexión después de usarla
-        ##else:
-        ##    flash("No se pudo conectar a la base de datos para cargar pacientes recientes.", "warning")
-        # ---------------------------------
+        with get_db_cursor() as (connection, cursor):
+            if connection:
+                patients_list_for_template = get_patients_by_recent_followup(connection, limit=10)
+            else:
+                flash("No se pudo conectar a la base de datos.", "warning")
 
-        # Pasar la lista a la plantilla
-        ##return render_template("main.html", username=nombre_usuario, recent_patients=recent_patients_list)
-
-        if connection:
-            # Llama a la nueva función con limit=10
-            patients_list_for_template = get_patients_by_recent_followup(connection, limit=10) # Cambiado
-            if not patients_list_for_template: # Si está vacía, muestra un mensaje amigable
-                flash("No hay pacientes con seguimientos recientes para mostrar.", "info")
-            connection.close()
-        else:
-            flash("No se pudo conectar a la base de datos para cargar pacientes.", "warning")
-            patients_list_for_template = [] # Asegura que sea una lista vacía en caso de error de conexión
-        # Pasa la lista a la plantilla con el mismo nombre de variable ('recent_patients')
-        # o puedes cambiar el nombre si prefieres y actualizar la plantilla.
-        # Por ahora, usaremos 'recent_patients' para minimizar cambios en el HTML.
+        if not patients_list_for_template:
+            flash("No hay pacientes con seguimientos recientes para mostrar.", "info")
+            
         return render_template("main.html", username=nombre_usuario, recent_patients=patients_list_for_template)
 
-
     except Exception as e:
-         # Manejo básico de errores si algo más falla
          app.logger.error(f"Error en la ruta /main: {e}", exc_info=True)
          flash("Ocurrió un error al cargar el dashboard.", "danger")
-         # Asegurarse de cerrar conexión si quedó abierta por el error
-         if connection and connection.is_connected():
-             connection.close()
-         # Redirigir a login podría ser una opción segura en caso de error grave
-         # return redirect(url_for('login'))
-         # O intentar renderizar con lo que se tenga
-         return render_template("main.html", username=session.get('nombre', session.get('usuario', 'Usuario')), recent_patients=[])
+         return render_template("main.html", username=session.get('nombre', 'Usuario'), recent_patients=[])
+
 
 @app.route('/resumen_ayer')
 @login_required 

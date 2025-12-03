@@ -200,6 +200,74 @@ def get_latest_postura_overall(connection, patient_id):
     finally: 
         if cursor: cursor.close()
 
+
+
+def get_first_postura_on_or_after_date(connection, patient_id, target_date_str):
+    cursor = None
+    try:
+        target_date_sql = parse_date(target_date_str)
+        cursor = connection.cursor(dictionary=True, buffered=True)
+        # Buscar el primero en o después
+        query = "SELECT * FROM postura WHERE id_px = %s AND fecha >= %s ORDER BY fecha ASC, id_postura ASC LIMIT 1"
+        cursor.execute(query, (patient_id, target_date_sql))
+        result = cursor.fetchone()
+        
+        if not result:
+            # Fallback: buscar el más reciente antes
+            query_fallback = "SELECT * FROM postura WHERE id_px = %s AND fecha < %s ORDER BY fecha DESC, id_postura DESC LIMIT 1"
+            cursor.execute(query_fallback, (patient_id, target_date_sql))
+            result = cursor.fetchone()
+            
+        return result
+    except Error: return None
+    finally: 
+        if cursor: cursor.close()
+
+def update_postura_ortho_notes(connection, id_postura, notas):
+    cursor = None
+    try:
+        cursor = connection.cursor()
+        query = "UPDATE postura SET notas_pruebas_ortoneuro = %s WHERE id_postura = %s"
+        cursor.execute(query, (notas, id_postura))
+        return True
+    except Error as e:
+        print(f"Error update_postura_ortho_notes: {e}")
+        return False
+    finally: 
+        if cursor: cursor.close()
+
+def get_latest_postura_on_or_before_date(connection, patient_id, target_date_str):
+    cursor = None
+    try:
+        target_date_sql = parse_date(target_date_str)
+        cursor = connection.cursor(dictionary=True, buffered=True)
+        query = "SELECT * FROM postura WHERE id_px = %s AND fecha <= %s ORDER BY fecha DESC, id_postura DESC LIMIT 1"
+        cursor.execute(query, (patient_id, target_date_sql))
+        data = cursor.fetchone()
+        if data:
+            for k in ['pie_cm', 'zapato_cm', 'fuerza_izq', 'fuerza_der']:
+                if data.get(k): data[k] = float(data[k])
+        return data
+    except Error: return None
+    finally: 
+        if cursor: cursor.close()
+
+def get_latest_antecedente_on_or_before_date(connection, patient_id, target_date_str):
+    cursor = None
+    try:
+        target_date_obj = datetime.strptime(target_date_str, '%d/%m/%Y')
+        cursor = connection.cursor(dictionary=True, buffered=True)
+        query = "SELECT * FROM antecedentes WHERE id_px = %s AND fecha <= %s ORDER BY fecha DESC, id_antecedente DESC LIMIT 1"
+        cursor.execute(query, (patient_id, target_date_obj.strftime('%Y-%m-%d')))
+        data = cursor.fetchone()
+        if data and data.get('calzado'): data['calzado'] = float(data['calzado'])
+        return data
+    except (ValueError, Error): return None
+    finally: 
+        if cursor: cursor.close()
+
+
+
 def get_radiografias_for_postura(connection, id_postura):
     cursor = None
     try:

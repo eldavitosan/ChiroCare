@@ -1,95 +1,233 @@
 <!doctype html>
 <html lang="es">
+
 <head>
     <meta charset="utf-8">
     <title>Recibo - {{ data.patient_nombre }}</title>
     <style>
         @page {
             size: letter portrait;
-            margin: 1cm 1.5cm; /* Margen para el recibo */
+            margin: 1cm 1.5cm;
+            /* Margen para el recibo */
         }
+
         body {
             font-family: "Helvetica", sans-serif;
             font-size: 10pt;
             line-height: 1.3;
             color: #333;
         }
-        table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
-        td, th { padding: 3px 5px; vertical-align: top; text-align: left; }
-        .text-right { text-align: right; }
-        .text-center { text-align: center; }
-        .bold { font-weight: bold; }
-        hr.dotted { border: none; border-top: 1px dotted #aaa; margin: 5px 0; }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 10px;
+        }
+
+        td,
+        th {
+            padding: 3px 5px;
+            vertical-align: top;
+            text-align: left;
+        }
+
+        .text-right {
+            text-align: right;
+        }
+
+        .text-center {
+            text-align: center;
+        }
+
+        .bold {
+            font-weight: bold;
+        }
+
+        hr.dotted {
+            border: none;
+            border-top: 1px dotted #aaa;
+            margin: 5px 0;
+        }
 
         /* --- Encabezado --- */
-        .header-table { width: 100%; margin-bottom: 15px; border-bottom: 1px solid #555; padding-bottom: 8px; }
-        .header-table td { border: none; padding: 0; vertical-align: bottom; } /* Alineado abajo */
-        .header-logo-cell { width: 80px; }
-        .header-logo-cell img { max-width: 100%; height: auto; max-height: 45px; }
-        .header-title-cell { text-align: right; }
-        .header-title-cell h1 { font-size: 18pt; color: #1a6a5f; margin: 0; }
+        .header-table {
+            width: 100%;
+            margin-bottom: 15px;
+            border-bottom: 1px solid #555;
+            padding-bottom: 8px;
+        }
+
+        .header-table td {
+            border: none;
+            padding: 0;
+            vertical-align: bottom;
+        }
+
+        /* Alineado abajo */
+        .header-logo-cell {
+            width: 80px;
+        }
+
+        .header-logo-cell img {
+            max-width: 100%;
+            height: auto;
+            max-height: 45px;
+        }
+
+        .header-title-cell {
+            text-align: right;
+        }
+
+        .header-title-cell h1 {
+            font-size: 18pt;
+            color: #1a6a5f;
+            margin: 0;
+        }
 
         /* --- Información del Recibo --- */
-        .receipt-info-table td { padding: 1px 5px; font-size: 9pt;}
-        .receipt-info-table td.label { font-weight: bold; width: 80px; }
+        .receipt-info-table td {
+            padding: 1px 5px;
+            font-size: 9pt;
+        }
+
+        .receipt-info-table td.label {
+            font-weight: bold;
+            width: 80px;
+        }
 
         /* --- Tabla de Detalles --- */
-        .details-table { margin-top: 15px; margin-bottom: 15px; }
+        .details-table {
+            margin-top: 15px;
+            margin-bottom: 15px;
+        }
+
         .details-table th {
-            background-color: #e9ecef; /* Fondo gris claro para cabecera */
+            background-color: #e9ecef;
+            /* Fondo gris claro para cabecera */
             font-weight: bold;
             border-bottom: 1px solid #555;
             padding: 5px;
             font-size: 9pt;
         }
+
         .details-table td {
-            border-bottom: 1px dotted #ccc; /* Líneas punteadas entre items */
+            border-bottom: 1px dotted #ccc;
+            /* Líneas punteadas entre items */
             padding: 4px 5px;
             font-size: 9pt;
         }
+
         .details-table tr:last-child td {
-            border-bottom: none; /* Sin línea en el último item */
+            border-bottom: none;
+            /* Sin línea en el último item */
         }
-        .details-table .col-desc { width: 45%; }
-        .details-table .col-qty { width: 10%; text-align: center; }
-        .details-table .col-price { width: 15%; text-align: right; }
-        .details-table .col-discount { width: 15%; text-align: right; color: #dc3545; } /* Descuento en rojo */
-        .details-table .col-subtotal { width: 15%; text-align: right; font-weight: bold; }
+
+        .details-table .col-desc {
+            width: 45%;
+        }
+
+        .details-table .col-qty {
+            width: 10%;
+            text-align: center;
+        }
+
+        .details-table .col-price {
+            width: 15%;
+            text-align: right;
+        }
+
+        .details-table .col-discount {
+            width: 15%;
+            text-align: right;
+            color: #dc3545;
+        }
+
+        /* Descuento en rojo */
+        .details-table .col-subtotal {
+            width: 15%;
+            text-align: right;
+            font-weight: bold;
+        }
 
         /* --- Sección de Totales --- */
         .totals-section {
-            width: 45%; /* Ocupa menos espacio */
-            margin-left: auto; /* Alineado a la derecha */
+            width: 45%;
+            /* Ocupa menos espacio */
+            margin-left: auto;
+            /* Alineado a la derecha */
             margin-right: 0;
             font-size: 10pt;
         }
-        .totals-section table { width: 100%; }
-        .totals-section td { padding: 2px 5px; }
-        .totals-section td.label { text-align: right; width: 65%; font-weight: bold; padding-right: 10px;}
-        .totals-section td.value { text-align: right; width: 35%; }
-        .totals-section tr.grand-total td { border-top: 1px solid #555; padding-top: 4px; font-size: 11pt; font-weight: bold;}
+
+        .totals-section table {
+            width: 100%;
+        }
+
+        .totals-section td {
+            padding: 2px 5px;
+        }
+
+        .totals-section td.label {
+            text-align: right;
+            width: 65%;
+            font-weight: bold;
+            padding-right: 10px;
+        }
+
+        .totals-section td.value {
+            text-align: right;
+            width: 35%;
+        }
+
+        .totals-section tr.grand-total td {
+            border-top: 1px solid #555;
+            padding-top: 4px;
+            font-size: 11pt;
+            font-weight: bold;
+        }
 
         /* --- Notas y Método de Pago --- */
-        .notes-payment-section { margin-top: 20px; font-size: 9pt; }
-        .notes-payment-section p { margin-bottom: 3px; }
-        .notes-content { white-space: pre-wrap; } /* Respeta saltos de línea */
+        .notes-payment-section {
+            margin-top: 20px;
+            font-size: 9pt;
+        }
+
+        .notes-payment-section p {
+            margin-bottom: 3px;
+        }
+
+        .notes-content {
+            white-space: pre-wrap;
+        }
+
+        /* Respeta saltos de línea */
 
         /* --- Footer --- */
-        .footer-info { position: fixed; bottom: -25px; left: 0cm; right: 0cm; text-align: center; font-size: 8pt; color: #666; border-top: 1px solid #ccc; padding-top: 5px; }
-
+        .footer-info {
+            position: fixed;
+            bottom: -25px;
+            left: 0cm;
+            right: 0cm;
+            text-align: center;
+            font-size: 8pt;
+            color: #666;
+            border-top: 1px solid #ccc;
+            padding-top: 5px;
+        }
     </style>
 </head>
+
 <body>
 
     <table class="header-table">
         <tr>
             <td class="header-logo-cell">
                 {% if data.logo_base64_uri %}
-                    <img src="{{ data.logo_base64_uri }}" alt="Logo">
+                <img src="{{ data.logo_base64_uri }}" alt="Logo">
                 {% else %}
-                    {% if data.centro_info and data.centro_info.nombre != 'N/A' %}
-                        <h4>{{ data.centro_info.nombre }}</h4>
-                    {% endif %}
+                {% if data.centro_info and data.centro_info.nombre != 'N/A' %}
+                <h4>{{ data.centro_info.nombre }}</h4>
+                {% endif %}
                 {% endif %}
             </td>
             <td class="header-title-cell">
@@ -100,7 +238,7 @@
 
     <table class="receipt-info-table">
         <tr>
-            
+
             <td class="label text-right">Fecha:</td>
             <td colspan="3">{{ data.fecha }}</td>
         </tr>
@@ -108,7 +246,7 @@
             <td class="label">Paciente:</td>
             <td colspan="3">{{ data.patient_nombre_completo }}</td>
         </tr>
-         <tr>
+        <tr>
             <td class="label">Atendido por:</td>
             <td colspan="3">{{ data.nombre_doctor or 'N/A' }}</td>
         </tr>
@@ -132,9 +270,9 @@
                 <td class="text-right">{{ "$%.2f"|format(item.costo_unitario_venta|float) }}</td>
                 <td class="text-right">
                     {% if item.descuento_linea > 0 %}
-                        (${{ "%.2f"|format(item.descuento_linea|float) }})
+                    (${{ "%.2f"|format(item.descuento_linea|float) }})
                     {% else %}
-                        $ 0.00
+                    $ 0.00
                     {% endif %}
                 </td>
                 <td class="text-right bold">{{ "$%.2f"|format(item.subtotal_linea_neto|float) }}</td>
@@ -160,99 +298,133 @@
             </tr>
             {% endif %}
             <tr class="grand-total">
-                <td class="label">Total Neto a Pagar:</td> {# Cambiado para claridad #}
+                <td class="label">Total Neto a Pagar:</td>
                 <td class="value">${{ "%.2f"|format(data.total_neto|float) }}</td>
             </tr>
-            
-            {# --- MOSTRAR PAGOS INDIVIDUALES Y CALCULAR TOTAL PAGADO --- #}
-            {% set total_pagado_calculado = (data.pago_efectivo or 0) + (data.pago_tarjeta or 0) + (data.pago_transferencia or 0) + (data.pago_otro or 0) %}
 
-            {% if data.pago_efectivo > 0 %}
             <tr>
-                <td class="label">Pagado en Efectivo:</td>
+                <td colspan="2" style="padding-top: 10px; border-bottom: 1px solid #ddd;">
+                    <strong>Historial de Pagos:</strong>
+                </td>
+            </tr>
+
+            {# Definimos un 'namespace' para que la variable sobreviva fuera del bucle #}
+            {% set calculos = namespace(total_pagado=0.0) %}
+
+            {% for pago in data.historial_pagos %}
+            {# Sumamos al acumulador #}
+            {% set calculos.total_pagado = calculos.total_pagado + (pago.monto|float) %}
+            <tr>
+                <td class="label" style="font-weight: normal; font-size: 9pt;">
+                    {{ pago.fecha }} - {{ pago.metodo_pago }}
+                    {% if pago.notas %} <br><span style="font-size: 7pt; color: #666;">({{ pago.notas }})</span> {%
+                    endif %}
+                </td>
+                <td class="value" style="font-size: 9pt;">
+                    ${{ "%.2f"|format(pago.monto|float) }}
+                </td>
+            </tr>
+            {% else %}
+            {# CASO: Recibos viejos que no tienen historial en la tabla nueva #}
+            {# Sumamos los campos antiguos al mismo acumulador #}
+            {% if data.pago_efectivo > 0 %}
+            {% set calculos.total_pagado = calculos.total_pagado + (data.pago_efectivo|float) %}
+            <tr>
+                <td class="label">Efectivo (Antiguo):</td>
                 <td class="value">${{ "%.2f"|format(data.pago_efectivo|float) }}</td>
             </tr>
             {% endif %}
             {% if data.pago_tarjeta > 0 %}
+            {% set calculos.total_pagado = calculos.total_pagado + (data.pago_tarjeta|float) %}
             <tr>
-                <td class="label">Pagado con Tarjeta:</td>
+                <td class="label">Tarjeta (Antiguo):</td>
                 <td class="value">${{ "%.2f"|format(data.pago_tarjeta|float) }}</td>
             </tr>
             {% endif %}
             {% if data.pago_transferencia > 0 %}
+            {% set calculos.total_pagado = calculos.total_pagado + (data.pago_transferencia|float) %}
             <tr>
-                <td class="label">Pagado por Transferencia:</td>
+                <td class="label">Transferencia (Antiguo):</td>
                 <td class="value">${{ "%.2f"|format(data.pago_transferencia|float) }}</td>
             </tr>
             {% endif %}
             {% if data.pago_otro > 0 %}
+            {% set calculos.total_pagado = calculos.total_pagado + (data.pago_otro|float) %}
             <tr>
-                <td class="label">Pagado ({{ data.pago_otro_desc or 'Otro' }}):</td>
+                <td class="label">Otro (Antiguo):</td>
                 <td class="value">${{ "%.2f"|format(data.pago_otro|float) }}</td>
             </tr>
             {% endif %}
+            {% endfor %}
 
-            {# Mostrar el total pagado calculado #}
             <tr>
-                <td class="label" style="border-top: 1px dotted #ccc; padding-top: 3px;">Total Pagado:</td>
-                <td class="value" style="border-top: 1px dotted #ccc; padding-top: 3px;">${{ "%.2f"|format(total_pagado_calculado|float) }}</td>
+                <td class="label" style="border-top: 1px solid #555; padding-top: 4px;">Total Abonado:</td>
+                <td class="value" style="border-top: 1px solid #555; padding-top: 4px;">${{
+                    "%.2f"|format(calculos.total_pagado) }}</td>
             </tr>
-            {# ------------------------------------------------------------- #}
 
-            {# Calcular y mostrar el cambio basado en el total pagado calculado #}
-            {% set cambio_calculado = total_pagado_calculado - (data.total_neto|float) %}
-            {% if cambio_calculado >= 0.009 %} {# Mostrar solo si es al menos un centavo #}
-             <tr class="grand-total">
-                <td class="label">Cambio:</td>
-                <td class="value">${{ "%.2f"|format(cambio_calculado|float) }}</td>
+            {# Calcular Saldo Pendiente #}
+            {% set saldo_pendiente = (data.total_neto|float) - calculos.total_pagado %}
+
+            {# Usamos 0.01 para evitar errores de decimales flotantes #}
+            {% if saldo_pendiente > 0.01 %}
+            <tr class="grand-total">
+                <td class="label" style="color: #dc3545;">Saldo Pendiente:</td>
+                <td class="value" style="color: #dc3545;">${{ "%.2f"|format(saldo_pendiente) }}</td>
             </tr>
-            {% elif total_pagado_calculado < (data.total_neto|float) %}
-             <tr class="grand-total">
-                <td class="label text-danger">Saldo Pendiente:</td>
-                <td class="value text-danger">${{ "%.2f"|format( (data.total_neto|float) - total_pagado_calculado ) }}</td>
-            </tr>
-            {% endif %}
+            {% elif saldo_pendiente < -0.01 %} <tr class="grand-total">
+                <td class="label">Cambio / A favor:</td>
+                <td class="value">${{ "%.2f"|format(saldo_pendiente * -1) }}</td>
+                </tr>
+                {% else %}
+                <tr class="grand-total">
+                    <td class="label" style="color: #28a745;">Estado:</td>
+                    <td class="value" style="color: #28a745;">PAGADO</td>
+                </tr>
+                {% endif %}
         </table>
     </div>
 
     <div class="notes-payment-section">
         {% if data.metodo_pago %}
-            <p><strong>Método de Pago:</strong> {{ data.metodo_pago }}</p>
+        <p><strong>Método de Pago:</strong> {{ data.metodo_pago }}</p>
         {% endif %}
         {% if data.notas %}
-            <p><strong>Notas:</strong></p>
-            <p class="notes-content">{{ data.notas | replace('\n', '<br>') | safe }}</p>
+        <p><strong>Notas:</strong></p>
+        <p class="notes-content">{{ data.notas | replace('\n', '<br>') | safe }}</p>
         {% endif %}
     </div>
 
     <div class="footer-info">
-    {% if data.centro_info and data.centro_info.nombre and data.centro_info.nombre != 'N/A' %} {# Asegurar que nombre exista también #}
+        {% if data.centro_info and data.centro_info.nombre and data.centro_info.nombre != 'N/A' %} {# Asegurar que
+        nombre exista también #}
         <strong>{{ data.centro_info.nombre }}</strong><br>
         {% if data.centro_info.direccion and data.centro_info.direccion != 'N/A' %}
-            {{ data.centro_info.direccion }}<br>
+        {{ data.centro_info.direccion }}<br>
         {% endif %}
-        
+
         {# --- LÍNEA MODIFICADA PARA CEL Y TEL --- #}
         {% set contact_parts = [] %}
         {% if data.centro_info.cel %} {# Solo añade si 'cel' tiene un valor (no es None, 0, o cadena vacía) #}
-            {% set _ = contact_parts.append("Cel: " ~ data.centro_info.cel) %}
+        {% set _ = contact_parts.append("Cel: " ~ data.centro_info.cel) %}
         {% endif %}
         {% if data.centro_info.tel %} {# Solo añade si 'tel' tiene un valor #}
-            {% set _ = contact_parts.append("Tel: " ~ data.centro_info.tel) %}
+        {% set _ = contact_parts.append("Tel: " ~ data.centro_info.tel) %}
         {% endif %}
-        
+
         {% if contact_parts %}
-            {{ contact_parts|join(' | ') }} {# Unir con ' | ' solo si hay partes #}
+        {{ contact_parts|join(' | ') }} {# Unir con ' | ' solo si hay partes #}
         {% else %}
-            Contacto no disponible
+        Contacto no disponible
         {% endif %}
         {# --- FIN LÍNEA MODIFICADA --- #}
 
-    {% else %}
+        {% else %}
         Chiropractic Care Center (Información de contacto no disponible)
-    {% endif %}
-    <br>Documento generado por Chiropractic Care Center &copy; {{ data.current_year_for_pdf }}
+        {% endif %}
+        <br>Documento generado por Chiropractic Care Center &copy; {{ data.current_year_for_pdf }}
     </div>
 
 </body>
+
 </html>

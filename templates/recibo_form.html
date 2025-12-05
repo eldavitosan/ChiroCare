@@ -4,23 +4,31 @@
 
 {% block head_extra %}
 <style>
-    body { background-color: #f4f7f6; }
+    body {
+        background-color: #f4f7f6;
+    }
 
     /* Estilos para la tabla de recibos */
     #recibo-detalles-body tr[data-item-id] {
         background-color: #f8f9fa;
     }
+
     .total-section {
         font-size: 1.1rem;
     }
+
     .total-section .total-neto {
         font-size: 1.4rem;
         font-weight: bold;
-        color: #2a9d8f; /* Color primario */
+        color: #2a9d8f;
+        /* Color primario */
     }
+
     .payment-input-group {
-        max-width: 200px; /* Ajusta el ancho de los inputs de pago */
+        max-width: 200px;
+        /* Ajusta el ancho de los inputs de pago */
     }
+
     #historial-compras-lista .list-group-item {
         padding: 0.5rem 1rem;
         font-size: 0.9rem;
@@ -31,7 +39,7 @@
 {% block content %}
 <div class="container-fluid mt-4">
     <div class="row">
-        
+
         <div class="col-md-3">
             {% include 'patient-sidebar.html' %}
         </div>
@@ -45,38 +53,57 @@
                         <i class="fas fa-receipt fa-fw me-2"></i>Recibos y Pagos
                     </h5>
                 </div>
-                
+
                 <div class="card-body">
 
                     <div class="row mb-3 align-items-center">
                         <div class="col-md-6">
                             <div class="dropdown">
-                                <button class="btn btn-outline-secondary dropdown-toggle btn-sm" type="button" id="reciboHistoryDropdown" data-bs-toggle="dropdown" aria-expanded="false">
-                                    Viendo: 
+                                <button class="btn btn-outline-secondary dropdown-toggle btn-sm" type="button"
+                                    id="reciboHistoryDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                                    Viendo:
                                     {% if recibo_id_cargado %}
-                                        {% set loaded_record = (recibos_anteriores|selectattr('id_recibo', 'equalto', recibo_id_cargado)|first) %}
-                                        {% if loaded_record %}
-                                            Recibo #{{ loaded_record.id_recibo }} - {{ loaded_record.fecha }}
-                                        {% else %}
-                                            ID {{ recibo_id_cargado }}
-                                        {% endif %}
+                                    {% set loaded_record = (recibos_anteriores|selectattr('id_recibo', 'equalto',
+                                    recibo_id_cargado)|first) %}
+                                    {% if loaded_record %}
+                                    Recibo #{{ loaded_record.id_recibo }} - {{ loaded_record.fecha }}
                                     {% else %}
-                                        Nuevo Recibo ({{ today_str }})
+                                    ID {{ recibo_id_cargado }}
+                                    {% endif %}
+                                    {% else %}
+                                    Nuevo Recibo ({{ today_str }})
                                     {% endif %}
                                 </button>
                                 <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="reciboHistoryDropdown">
                                     <li>
-                                        <a class="dropdown-item {% if not recibo_id_cargado %}active{% endif %}" 
-                                           href="{{ url_for('clinical.manage_recibos', patient_id=patient.id_px) }}">
+                                        <a class="dropdown-item {% if not recibo_id_cargado %}active{% endif %}"
+                                            href="{{ url_for('clinical.manage_recibos', patient_id=patient.id_px) }}">
                                             + Crear Nuevo ({{ today_str }})
                                         </a>
                                     </li>
-                                    <li><hr class="dropdown-divider"></li>
+                                    <li>
+                                        <hr class="dropdown-divider">
+                                    </li>
                                     {% for recibo in recibos_anteriores %}
                                     <li>
-                                        <a class="dropdown-item {% if recibo_id_cargado == recibo.id_recibo %}active{% endif %}"
-                                           href="{{ url_for('clinical.manage_recibos', patient_id=patient.id_px, recibo_id=recibo.id_recibo) }}">
-                                            Recibo #{{ recibo.id_recibo }} - {{ recibo.fecha }} - {{ "$%.2f"|format(recibo.total_neto|float) }}
+                                        <a class="dropdown-item d-flex justify-content-between align-items-center {% if recibo_id_cargado == recibo.id_recibo %}active{% endif %}"
+                                            href="{{ url_for('clinical.manage_recibos', patient_id=patient.id_px, recibo_id=recibo.id_recibo) }}">
+                                            <div>
+                                                <span class="fw-bold">#{{ recibo.id_recibo }}</span> - {{ recibo.fecha
+                                                }}
+                                                <br><small class="text-muted" style="font-size: 0.75rem;">{{
+                                                    recibo.conceptos_principales|truncate(30) }}</small>
+                                            </div>
+
+                                            {% if recibo.saldo_pendiente and recibo.saldo_pendiente > 0.09 %}
+                                            <span class="badge bg-danger ms-2 rounded-pill">
+                                                Debe: ${{ "%.2f"|format(recibo.saldo_pendiente) }}
+                                            </span>
+                                            {% else %}
+                                            <span class="badge bg-success ms-2 rounded-pill">
+                                                <i class="fas fa-check"></i>
+                                            </span>
+                                            {% endif %}
                                         </a>
                                     </li>
                                     {% endfor %}
@@ -85,28 +112,33 @@
                         </div>
                         <div class="col-md-6 text-md-end">
                             {% if not is_new_recibo and current_recibo_data %}
-                                <p class="text-muted mb-0"><small>Mostrando Recibo #{{ current_recibo_data.id_recibo }}</small></p>
-                                <a href="{{ url_for('clinical.generate_recibo_pdf', patient_id=patient.id_px, id_recibo=current_recibo_data.id_recibo) }}" class="btn btn-sm btn-info mt-1" target="_blank">
-                                    <i class="fas fa-file-pdf me-1"></i> Ver PDF
-                                </a>
+                            <p class="text-muted mb-0"><small>Mostrando Recibo #{{ current_recibo_data.id_recibo
+                                    }}</small></p>
+                            <a href="{{ url_for('clinical.generate_recibo_pdf', patient_id=patient.id_px, id_recibo=current_recibo_data.id_recibo) }}"
+                                class="btn btn-sm btn-info mt-1" target="_blank">
+                                <i class="fas fa-file-pdf me-1"></i> Ver PDF
+                            </a>
                             {% else %}
-                                <p class="text-muted mb-0"><small>Creando Nuevo Recibo (Fecha: {{ today_str }})</small></p>
+                            <p class="text-muted mb-0"><small>Creando Nuevo Recibo (Fecha: {{ today_str }})</small></p>
                             {% endif %}
                         </div>
                     </div>
 
-                    <form id="recibo-form" method="POST" action="{{ url_for('clinical.manage_recibos', patient_id=patient.id_px) }}">
-                        
+                    <form id="recibo-form" method="POST"
+                        action="{{ url_for('clinical.manage_recibos', patient_id=patient.id_px) }}">
+
 
                         <input type="hidden" name="recibo_detalles_json" id="recibo_detalles_json">
                         <input type="hidden" name="subtotal_bruto_hidden" id="subtotal_bruto_hidden" value="0.00">
                         <input type="hidden" name="descuento_total_hidden" id="descuento_total_hidden" value="0.00">
                         <input type="hidden" name="total_neto_hidden" id="total_neto_hidden" value="0.00">
                         <input type="hidden" name="cambio_hidden" id="cambio_hidden" value="0.00">
-                        <input type="hidden" name="fecha_recibo" value="{{ current_recibo_data.fecha if current_recibo_data else today_str }}">
+                        <input type="hidden" name="fecha_recibo"
+                            value="{{ current_recibo_data.fecha if current_recibo_data else today_str }}">
 
                         {% if is_new_recibo %}
-                        <div class="card border mb-3 form-section"> <div class="card-header bg-light">
+                        <div class="card border mb-3 form-section">
+                            <div class="card-header bg-light">
                                 <h5 class="mb-0">Añadir Productos/Servicios</h5>
                             </div>
                             <div class="card-body">
@@ -116,15 +148,16 @@
                                         <select id="producto-select" class="form-select">
                                             <option value="" data-precio="0">Seleccionar...</option>
                                             {% for prod in productos %}
-                                                <option value="{{ prod.id_prod }}" data-precio="{{ prod.venta or 0.00 }}">
-                                                    {{ prod.nombre }}
-                                                </option>
+                                            <option value="{{ prod.id_prod }}" data-precio="{{ prod.venta or 0.00 }}">
+                                                {{ prod.nombre }}
+                                            </option>
                                             {% endfor %}
                                         </select>
                                     </div>
                                     <div class="col-md-2">
                                         <label for="producto-cantidad" class="form-label">Cantidad</label>
-                                        <input type="number" id="producto-cantidad" class="form-control" value="1" min="1">
+                                        <input type="number" id="producto-cantidad" class="form-control" value="1"
+                                            min="1">
                                     </div>
                                     <div class="col-md-2">
                                         <label for="producto-descuento-tipo" class="form-label">Desc.</label>
@@ -135,27 +168,32 @@
                                     </div>
                                     <div class="col-md-2">
                                         <label for="producto-descuento" class="form-label">Monto</label>
-                                        <input type="number" id="producto-descuento" class="form-control" value="0" min="0" step="0.01">
+                                        <input type="number" id="producto-descuento" class="form-control" value="0"
+                                            min="0" step="0.01">
                                     </div>
                                     <div class="col-md-1 d-flex align-items-end">
-                                        <button type="button" id="add-item-btn" class="btn btn-success w-100" title="Añadir">
+                                        <button type="button" id="add-item-btn" class="btn btn-success w-100"
+                                            title="Añadir">
                                             <i class="fas fa-plus"></i>
                                         </button>
                                     </div>
                                 </div>
                                 <div class="row g-3 mt-1 text-center">
                                     <div class="col-6">
-                                        <small class="text-muted">Precio Unitario: <strong id="producto-precio-display" class="text-dark">$ 0.00</strong></small>
+                                        <small class="text-muted">Precio Unitario: <strong id="producto-precio-display"
+                                                class="text-dark">$ 0.00</strong></small>
                                     </div>
                                     <div class="col-6">
-                                        <small class="text-muted">Subtotal Línea: <strong id="linea-subtotal-display" class="text-dark">$ 0.00</strong></small>
+                                        <small class="text-muted">Subtotal Línea: <strong id="linea-subtotal-display"
+                                                class="text-dark">$ 0.00</strong></small>
                                     </div>
                                 </div>
                             </div>
                         </div>
                         {% endif %}
 
-                        <div class="card border mb-3"> <div class="card-header">
+                        <div class="card border mb-3">
+                            <div class="card-header">
                                 <h5 class="mb-0">Detalle del Recibo</h5>
                             </div>
                             <div class="card-body p-0">
@@ -167,82 +205,132 @@
                                             <th class="text-end">Precio Unit.</th>
                                             <th class="text-end">Desc.</th>
                                             <th class="text-end">Subtotal</th>
-                                            {% if is_new_recibo %}<th class="action-col" style="width: 50px;"></th>{% endif %}
+                                            {% if is_new_recibo %}<th class="action-col" style="width: 50px;"></th>{%
+                                            endif %}
                                         </tr>
                                     </thead>
                                     <tbody id="recibo-detalles-body">
-                                        <tr id="no-items-msg" {% if current_recibo_detalles %}style="display: none;"{% endif %}>
+                                        <tr id="no-items-msg" {% if current_recibo_detalles %}style="display: none;" {%
+                                            endif %}>
                                             <td colspan="6" class="text-center text-muted p-4">
-                                                {% if is_new_recibo %}Añada productos para crear el recibo.{% else %}Este recibo no tiene detalles.{% endif %}
+                                                {% if is_new_recibo %}
+                                                Añada productos para crear el recibo.
+                                                {% else %}
+                                                Este recibo no tiene detalles (Cargando...).
+                                                {% endif %}
                                             </td>
                                         </tr>
-                                        {% if not is_new_recibo and current_recibo_detalles %}
-                                            {% for item in current_recibo_detalles %}
-                                            <tr data-item-id="{{ item.id_prod }}">
-                                                <td>{{ item.descripcion_item or item.nombre_producto or 'N/A' }}</td>
-                                                <td class="text-end">{{ item.cantidad|int }}</td>
-                                                <td class="text-end">{{ "$%.2f"|format(item.costo_unitario_venta|float) }}</td>
-                                                <td class="text-end text-danger">{{ ("($%.2f)"|format(item.descuento_linea|float)) if item.descuento_linea > 0 else '-' }}</td>
-                                                <td class="text-end">{{ "$%.2f"|format(item.subtotal_linea_neto|float) }}</td>
-                                            </tr>
-                                            {% endfor %}
-                                        {% endif %}
+
                                     </tbody>
                                 </table>
                             </div>
                         </div>
 
-                        <div class="card border mb-3"> <div class="card-body">
+                        <div class="card border mb-3">
+                            <div class="card-body">
                                 <div class="row g-4">
                                     <div class="col-lg-6 total-section">
                                         <h5 class="mb-3">Totales</h5>
                                         <div class="d-flex justify-content-between mb-2">
                                             <span>Subtotal Bruto:</span>
-                                            <span id="subtotal-bruto-display">{{ "$%.2f"|format(current_recibo_data.subtotal_bruto|float if current_recibo_data else 0.0) }}</span>
+                                            <span id="subtotal-bruto-display">{{
+                                                "$%.2f"|format(current_recibo_data.subtotal_bruto|float if
+                                                current_recibo_data else 0.0) }}</span>
                                         </div>
                                         <div class="d-flex justify-content-between mb-2">
                                             <span>Descuentos:</span>
-                                            <span id="descuento-total-display" class="text-danger">({{ "$%.2f"|format(current_recibo_data.descuento_total|float if current_recibo_data else 0.0) }})</span>
+                                            <span id="descuento-total-display" class="text-danger">({{
+                                                "$%.2f"|format(current_recibo_data.descuento_total|float if
+                                                current_recibo_data else 0.0) }})</span>
                                         </div>
                                         <hr class="my-2">
                                         <div class="d-flex justify-content-between mb-2">
                                             <strong class="total-neto">Total Neto:</strong>
-                                            <strong class="total-neto" id="total-neto-display">{{ "$%.2f"|format(current_recibo_data.total_neto|float if current_recibo_data else 0.0) }}</strong>
+                                            <strong class="total-neto" id="total-neto-display">{{
+                                                "$%.2f"|format(current_recibo_data.total_neto|float if
+                                                current_recibo_data else 0.0) }}</strong>
                                         </div>
                                     </div>
 
                                     <div class="col-lg-6">
-                                        <h5 class="mb-3">Método de Pago</h5>
-                                        <div class="input-group input-group-sm mb-2 payment-input-group">
-                                            <span class="input-group-text" style="width: 120px;"><i class="fas fa-money-bill-wave fa-fw me-2"></i> Efectivo</span>
-                                            <input type="number" class="form-control text-end" id="pago_efectivo" name="pago_efectivo" min="0" step="0.01" 
-                                                   value="{{ '%.2f'|format(current_recibo_data.pago_efectivo|float) if current_recibo_data else '' }}" 
-                                                   {% if not is_new_recibo %}readonly{% endif %}>
+                                        {% if not is_new_recibo and current_recibo_data.saldo_pendiente > 0.01 %}
+                                        <div class="alert alert-warning border-danger bg-warning bg-opacity-10">
+                                            <h5 class="text-danger fw-bold"><i class="fas fa-exclamation-circle"></i>
+                                                Saldo Pendiente</h5>
+                                            <div class="d-flex justify-content-between align-items-end mt-3">
+                                                <div>
+                                                    <small class="text-muted text-uppercase">Total Recibo: ${{
+                                                        "%.2f"|format(current_recibo_data.total_neto) }}</small><br>
+                                                    <span class="display-6 text-danger fw-bold">${{
+                                                        "%.2f"|format(current_recibo_data.saldo_pendiente) }}</span>
+                                                </div>
+                                                <button type="button" class="btn btn-success shadow-sm mb-1"
+                                                    data-bs-toggle="modal" data-bs-target="#modalAbono">
+                                                    <i class="fas fa-hand-holding-usd fa-lg me-2"></i> Registrar Abono
+                                                </button>
+                                            </div>
+                                            <hr>
+                                            <small class="text-muted"><i class="fas fa-lock"></i> Los productos no
+                                                pueden editarse mientras exista deuda o el recibo esté cerrado.</small>
                                         </div>
+                                        {% else %}
+                                        <h5 class="mb-3">Método de Pago {% if not is_new_recibo %}(Histórico){% endif %}
+                                        </h5>
+
                                         <div class="input-group input-group-sm mb-2 payment-input-group">
-                                            <span class="input-group-text" style="width: 120px;"><i class="fas fa-credit-card fa-fw me-2"></i> Tarjeta</span>
-                                            <input type="number" class="form-control text-end" id="pago_tarjeta" name="pago_tarjeta" min="0" step="0.01" 
-                                                   value="{{ '%.2f'|format(current_recibo_data.pago_tarjeta|float) if current_recibo_data else '' }}" 
-                                                   {% if not is_new_recibo %}readonly{% endif %}>
+                                            <span class="input-group-text" style="width: 120px;"><i
+                                                    class="fas fa-money-bill-wave fa-fw me-2"></i> Efectivo</span>
+                                            <input type="number" class="form-control text-end" id="pago_efectivo"
+                                                name="pago_efectivo" min="0" step="0.01"
+                                                value="{{ '%.2f'|format(current_recibo_data.pago_efectivo|float) if current_recibo_data else '' }}"
+                                                {% if not is_new_recibo %}readonly{% endif %}>
                                         </div>
+
                                         <div class="input-group input-group-sm mb-2 payment-input-group">
-                                            <span class="input-group-text" style="width: 120px;"><i class="fas fa-exchange-alt fa-fw me-2"></i> Transferencia</span>
-                                            <input type="number" class="form-control text-end" id="pago_transferencia" name="pago_transferencia" min="0" step="0.01" 
-                                                   value="{{ '%.2f'|format(current_recibo_data.pago_transferencia|float) if current_recibo_data else '' }}" 
-                                                   {% if not is_new_recibo %}readonly{% endif %}>
+                                            <span class="input-group-text" style="width: 120px;"><i
+                                                    class="fas fa-credit-card fa-fw me-2"></i> Tarjeta</span>
+                                            <input type="number" class="form-control text-end" id="pago_tarjeta"
+                                                name="pago_tarjeta" min="0" step="0.01"
+                                                value="{{ '%.2f'|format(current_recibo_data.pago_tarjeta|float) if current_recibo_data else '' }}"
+                                                {% if not is_new_recibo %}readonly{% endif %}>
                                         </div>
+
+                                        <div class="input-group input-group-sm mb-2 payment-input-group">
+                                            <span class="input-group-text" style="width: 120px;"><i
+                                                    class="fas fa-exchange-alt fa-fw me-2"></i> Transferencia</span>
+                                            <input type="number" class="form-control text-end" id="pago_transferencia"
+                                                name="pago_transferencia" min="0" step="0.01"
+                                                value="{{ '%.2f'|format(current_recibo_data.pago_transferencia|float) if current_recibo_data else '' }}"
+                                                {% if not is_new_recibo %}readonly{% endif %}>
+                                        </div>
+
                                         <div class="input-group input-group-sm mb-2">
-                                            <input type="text" class="form-control" style="max-width: 120px;" name="pago_otro_desc" placeholder="Otro Método" 
-                                                   value="{{ current_recibo_data.pago_otro_desc or '' }}" 
-                                                   {% if not is_new_recibo %}readonly{% endif %}>
-                                            <input type="number" class="form-control text-end payment-input-group" id="pago_otro" name="pago_otro" min="0" step="0.01" 
-                                                   value="{{ '%.2f'|format(current_recibo_data.pago_otro|float) if current_recibo_data else '' }}" 
-                                                   {% if not is_new_recibo %}readonly{% endif %}>
+                                            <input type="text" class="form-control" style="max-width: 120px;"
+                                                name="pago_otro_desc" placeholder="Otro Método"
+                                                value="{{ current_recibo_data.pago_otro_desc or '' }}" {% if not
+                                                is_new_recibo %}readonly{% endif %}>
+                                            <input type="number" class="form-control text-end payment-input-group"
+                                                id="pago_otro" name="pago_otro" min="0" step="0.01"
+                                                value="{{ '%.2f'|format(current_recibo_data.pago_otro|float) if current_recibo_data else '' }}"
+                                                {% if not is_new_recibo %}readonly{% endif %}>
                                         </div>
+
+                                        {% if not is_new_recibo %}
+                                        <div class="alert alert-success mt-3 py-2">
+                                            <i class="fas fa-check-circle"></i> Este recibo está
+                                            <strong>PAGADO</strong>.
+                                        </div>
+                                        {% endif %}
+                                        {% endif %}
+
                                         <hr class="my-2">
                                         <div class="d-flex justify-content-between mb-1 total-section">
                                             <span>Total Pagado:</span>
-                                            <span id="total-pagado-display" class="fw-bold">$ 0.00</span>
+                                            <span id="total-pagado-display" class="fw-bold">
+                                                {% if current_recibo_data %}${{
+                                                "%.2f"|format(current_recibo_data.total_neto -
+                                                current_recibo_data.saldo_pendiente) }}{% else %}$ 0.00{% endif %}
+                                            </span>
                                         </div>
                                         <div class="d-flex justify-content-between total-section">
                                             <span>Cambio:</span>
@@ -250,12 +338,13 @@
                                         </div>
                                     </div>
                                 </div>
-                                
+
                                 <div class="row mt-3">
                                     <div class="col-12">
                                         <label for="notas_recibo" class="form-label">Notas del Recibo</label>
-                                        <textarea class="form-control" id="notas_recibo" name="notas_recibo" rows="2" 
-                                                  {% if not is_new_recibo %}readonly{% endif %}>{{ current_recibo_data.notas or '' }}</textarea>
+                                        <textarea class="form-control" id="notas_recibo" name="notas_recibo" rows="2" {%
+                                            if not is_new_recibo %}readonly{% endif
+                                            %}>{{ current_recibo_data.notas or '' }}</textarea>
                                     </div>
                                 </div>
                             </div>
@@ -270,51 +359,148 @@
                         </div>
                     </form>
 
-                    <div class="card border mb-3"> <div class="card-header bg-light">
+                    <div class="card border mb-3">
+                        <div class="card-header bg-light">
                             <h5 class="mb-0">
                                 <i class="fas fa-history me-2"></i>Historial de Compras del Paciente
                             </h5>
                         </div>
                         <div class="card-body" style="max-height: 400px; overflow-y: auto;">
                             {% if historial_de_compras %}
-                                <ul class="list-group list-group-flush" id="historial-compras-lista">
+                            <ul class="list-group list-group-flush" id="historial-compras-lista">
                                 {% for item in historial_de_compras %}
-                                    <li class="list-group-item d-flex justify-content-between align-items-center">
-                                        <div>
-                                            <span class="fw-bold">{{ item.descripcion_item }}</span>
-                                            <small class="text-muted d-block">
-                                                Recibo #{{ item.id_recibo }} ({{ item.fecha_recibo }})
-                                            </small>
-                                        </div>
-                                        <div>
-                                            <span class="badge bg-secondary rounded-pill me-2">Cant: {{ item.cantidad|int }}</span>
-                                            <span class="text-dark">{{ "$%.2f"|format(item.subtotal_linea_neto|float) }}</span>
-                                        </div>
-                                    </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <span class="fw-bold">{{ item.descripcion_item }}</span>
+                                        <small class="text-muted d-block">
+                                            Recibo #{{ item.id_recibo }} ({{ item.fecha_recibo }})
+                                        </small>
+                                    </div>
+                                    <div>
+                                        <span class="badge bg-secondary rounded-pill me-2">Cant: {{ item.cantidad|int
+                                            }}</span>
+                                        <span class="text-dark">{{ "$%.2f"|format(item.subtotal_linea_neto|float)
+                                            }}</span>
+                                    </div>
+                                </li>
                                 {% endfor %}
-                                </ul>
+                            </ul>
                             {% else %}
-                                <p class="text-muted p-3">Este paciente no tiene compras registradas.</p>
+                            <p class="text-muted p-3">Este paciente no tiene compras registradas.</p>
                             {% endif %}
                         </div>
                     </div>
 
-                </div> </div> </div> </div> </div> {% endblock %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="modal fade" id="modalAbono" tabindex="-1" aria-labelledby="modalAbonoLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title" id="modalAbonoLabel">Registrar Abono</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                    aria-label="Close"></button>
+            </div>
+            <form id="formAbono"
+                action="{{ url_for('clinical.abonar_recibo_route', patient_id=patient.id_px, recibo_id=current_recibo_data.id_recibo) if current_recibo_data else '#' }}"
+                method="POST">
+
+                <input type="hidden" name="patient_id" value="{{ patient.id_px }}">
+
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Monto a Abonar ($)</label>
+                        <input type="number" name="monto_abono" class="form-control form-control-lg text-center fw-bold"
+                            min="0.01" step="0.01"
+                            max="{{ '%.2f'|format(current_recibo_data.saldo_pendiente) if current_recibo_data else '' }}"
+                            required placeholder="0.00">
+                        <div class="form-text text-end">Deuda: ${{ "%.2f"|format(current_recibo_data.saldo_pendiente) if
+                            current_recibo_data else 0 }}</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Método de Pago</label>
+                        <select name="metodo_pago_abono" class="form-select">
+                            <option value="Efectivo">Efectivo</option>
+                            <option value="Tarjeta">Tarjeta</option>
+                            <option value="Transferencia">Transferencia</option>
+                        </select>
+                    </div>
+                    <div class="mb-1">
+                        <textarea name="notas_abono" class="form-control form-control-sm"
+                            placeholder="Notas opcionales..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-success">Confirmar Pago</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
 
 
 {% block scripts %}
 {{ super() }}
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Inicializa el formulario de recibo
-        // Pasa los detalles del recibo (si existen) y el modo solo-lectura
-        const isReadOnly = {{ (not is_new_recibo)|tojson }};
-        const initialItems = {{ (current_recibo_detalles or [])|tojson }};
 
-        if (typeof initializeReciboForm === 'function') {
-            initializeReciboForm(isReadOnly, initialItems);
-        } else {
-            console.error("La función 'initializeReciboForm' no está definida en app.js");
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const isReadOnly = {{ (not is_new_recibo) | tojson }};
+    const initialItems = {{ (current_recibo_detalles or[])| tojson }};
+
+    if (typeof initializeReciboForm === 'function') {
+        initializeReciboForm(isReadOnly, initialItems);
+    } else {
+        console.error("La función 'initializeReciboForm' no está definida en app.js");
+    }
+    });
+</script>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const formAbono = document.getElementById('formAbono');
+
+        if (formAbono) {
+            formAbono.addEventListener('submit', function (e) {
+                e.preventDefault(); // Evita que la página se recargue de golpe
+
+                // Feedback visual en el botón
+                const btnSubmit = this.querySelector('button[type="submit"]');
+                const originalText = btnSubmit.innerHTML;
+                btnSubmit.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Procesando...';
+                btnSubmit.disabled = true;
+
+                const formData = new FormData(this);
+
+                fetch(this.action, {
+                    method: 'POST',
+                    body: formData
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            // 1. Abrir PDF en pestaña nueva
+                            window.open(data.pdf_url, '_blank');
+
+                            // 2. Recargar esta página para ver los cambios
+                            window.location.href = "{{ url_for('clinical.manage_recibos', patient_id=patient.id_px) }}";
+                        } else {
+                            alert("Error: " + data.message);
+                            btnSubmit.innerHTML = originalText;
+                            btnSubmit.disabled = false;
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert("Ocurrió un error de conexión.");
+                        btnSubmit.innerHTML = originalText;
+                        btnSubmit.disabled = false;
+                    });
+            });
         }
     });
 </script>

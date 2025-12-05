@@ -33,7 +33,7 @@ from db.finance import (
     get_productos_servicios_by_type, get_productos_by_ids, get_productos_servicios_venta,
     save_recibo, get_specific_recibo, get_plan_cuidado_activo_para_paciente,
     get_recibo_detalles_by_id, get_recibos_by_patient, get_recibo_by_id,
-    get_active_plan_status, analizar_adicionales_plan, get_historial_compras_paciente
+    get_active_plan_status, analizar_adicionales_plan, get_historial_compras_paciente,registrar_abono
 )
 from db.auth import get_all_doctors, get_centro_by_id, get_doctor_profile
 
@@ -2208,3 +2208,34 @@ def get_postura_data_for_date(patient_id):
     finally:
         if connection and connection.is_connected():
             connection.close()
+
+
+@clinical_bp.route('/recibo/<int:recibo_id>/abonar', methods=['POST'])
+@login_required
+def abonar_recibo_route(patient_id, recibo_id):
+    try:
+        monto = request.form.get('monto_abono', type=float)
+        metodo = request.form.get('metodo_pago_abono')
+        notas = request.form.get('notas_abono', '')
+
+        if not monto or monto <= 0:
+            return jsonify({'success': False, 'message': "El monto debe ser mayor a 0."}), 400
+
+        with get_db_cursor(commit=True) as (connection, cursor):
+            exito = registrar_abono(connection, recibo_id, monto, metodo, notas)
+            
+            if exito:
+                # 1. Guardamos el mensaje para que salga al recargar la página
+                flash("Abono registrado exitosamente.", "success")
+                
+                # 2. Enviamos la URL del PDF al navegador
+                return jsonify({
+                    'success': True,
+                    'pdf_url': url_for('clinical.generate_recibo_pdf', patient_id=patient_id, id_recibo=recibo_id)
+                })
+            else:
+                return jsonify({'success': False, 'message': "Error al registrar el abono."}), 400
+
+    except Exception as e:
+        current_app.logger.error(f"Error en abono: {e}")
+        return jsonify({'success': False, 'message': "Ocurrió un error interno."}), 500

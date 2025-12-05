@@ -19,7 +19,7 @@ from db.clinical import (
 )
 from db.finance import (
     get_plan_cuidado_activo_para_paciente, analizar_adicionales_plan,
-    get_active_plan_status
+    get_active_plan_status,get_total_deuda_paciente, get_primer_recibo_pendiente
 )
 
 from utils.date_manager import to_frontend_str, parse_date
@@ -118,6 +118,9 @@ def patient_detail(patient_id):
             unseen_notes_list = get_unseen_notes_for_patient(connection, patient_id)
             historial_clinico = get_patient_history_timeline(connection, patient_id)
 
+            deuda_total = get_total_deuda_paciente(connection, patient_id)
+            id_recibo_deuda = get_primer_recibo_pendiente(connection, patient_id)
+
             return render_template('patient_detail.html',
                                    patient=patient,
                                    has_antecedentes_today=has_antecedentes_today,
@@ -126,7 +129,9 @@ def patient_detail(patient_id):
                                    adicionales_status=adicionales_status,
                                    num_postura_records=num_postura_records,
                                    unseen_notes=unseen_notes_list,
-                                   historial=historial_clinico
+                                   historial=historial_clinico,
+                                   deuda_total=deuda_total,
+                                   id_recibo_deuda=id_recibo_deuda
                                    )
 
     except Exception as e:

@@ -135,21 +135,81 @@ def save_recibo(connection, datos_recibo, detalles_recibo):
         f_obj = parse_date(datos_recibo.get('fecha'))
         f_sql = f_obj.strftime('%Y-%m-%d') if isinstance(f_obj, (date, datetime)) else str(f_obj)
 
-        sql_r = """INSERT INTO recibos (id_px, id_dr, fecha, subtotal_bruto, descuento_total, total_neto, pago_efectivo, pago_tarjeta, pago_transferencia, pago_otro, pago_otro_desc, notas) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"""
-        vals_r = (datos_recibo['id_px'], datos_recibo['id_dr'], f_sql, datos_recibo.get('subtotal_bruto',0), datos_recibo.get('descuento_total',0), datos_recibo.get('total_neto',0), datos_recibo.get('pago_efectivo',0), datos_recibo.get('pago_tarjeta',0), datos_recibo.get('pago_transferencia',0), datos_recibo.get('pago_otro',0), datos_recibo.get('pago_otro_desc'), datos_recibo.get('notas'))
+        # 1. Calcular Totales Financieros
+        total_neto = float(datos_recibo.get('total_neto', 0))
+        pago_efectivo = float(datos_recibo.get('pago_efectivo', 0))
+        pago_tarjeta = float(datos_recibo.get('pago_tarjeta', 0))
+        pago_transferencia = float(datos_recibo.get('pago_transferencia', 0))
+        pago_otro = float(datos_recibo.get('pago_otro', 0))
+        
+        total_pagado_inicial = pago_efectivo + pago_tarjeta + pago_transferencia + pago_otro
+        
+        # 2. Determinar Deuda y Estado
+        saldo_pendiente = total_neto - total_pagado_inicial
+        # Si el saldo es menor a 1 centavo (por errores de redondeo), se considera pagado
+        estado = 'PENDIENTE' if saldo_pendiente > 0.01 else 'PAGADO'
+        if saldo_pendiente < 0: saldo_pendiente = 0 # No guardar saldos negativos aqui
+
+        # 3. Insertar Cabecera del Recibo (Ahora con estado y saldo)
+        sql_r = """
+            INSERT INTO recibos 
+            (id_px, id_dr, fecha, subtotal_bruto, descuento_total, total_neto, 
+             pago_efectivo, pago_tarjeta, pago_transferencia, pago_otro, pago_otro_desc, 
+             notas, estado, saldo_pendiente) 
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """
+        vals_r = (
+            datos_recibo['id_px'], datos_recibo['id_dr'], f_sql, 
+            datos_recibo.get('subtotal_bruto',0), datos_recibo.get('descuento_total',0), total_neto, 
+            pago_efectivo, pago_tarjeta, pago_transferencia, pago_otro, datos_recibo.get('pago_otro_desc'), 
+            datos_recibo.get('notas'), estado, saldo_pendiente
+        )
         cursor.execute(sql_r, vals_r)
         id_recibo = cursor.lastrowid
 
+        # 4. Insertar Detalles y ACTUALIZAR INVENTARIO
         sql_d = """INSERT INTO recibo_detalle (id_recibo, id_prod, cantidad, descripcion_prod, costo_unitario_venta, costo_unitario_compra, descuento_linea, subtotal_linea_neto) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"""
+        sql_update_stock = """UPDATE productos_servicios SET stock_actual = stock_actual - %s WHERE id_prod = %s"""
+        
         vals_d = []
         for d in detalles_recibo:
-            costo_interno = get_producto_costo_interno(connection, d['id_prod'])
-            vals_d.append((id_recibo, d['id_prod'], d['cantidad'], d.get('descripcion_prod'), d['costo_unitario_venta'], costo_interno, d.get('descuento_linea', 0), d['subtotal_linea_neto']))
+            id_prod = d['id_prod']
+            cantidad = int(d['cantidad'])
+            costo_interno = get_producto_costo_interno(connection, id_prod)
+            
+            vals_d.append((
+                id_recibo, id_prod, cantidad, d.get('descripcion_prod'), 
+                d['costo_unitario_venta'], costo_interno, d.get('descuento_linea', 0), d['subtotal_linea_neto']
+            ))
+            
+            # Descontar del inventario (uno por uno para seguridad)
+            cursor.execute(sql_update_stock, (cantidad, id_prod))
         
         cursor.executemany(sql_d, vals_d)
+
+        # 5. Registrar el pago inicial en el historial (Si hubo pago)
+        if total_pagado_inicial > 0:
+            # Creamos una nota automática para este primer pago
+            nota_pago = "Pago inicial al crear el recibo"
+            
+            # Insertamos un registro por cada método si es > 0, o uno consolidado. 
+            # Para simplificar, insertamos uno consolidado o desglosado. Vamos a desglosar:
+            pagos_detalle = [
+                ('Efectivo', pago_efectivo), ('Tarjeta', pago_tarjeta), 
+                ('Transferencia', pago_transferencia), 
+                (f"Otro ({datos_recibo.get('pago_otro_desc','Vales')})", pago_otro)
+            ]
+            
+            sql_pago = "INSERT INTO recibo_pagos (id_recibo, fecha, monto, metodo_pago, notas) VALUES (%s, %s, %s, %s, %s)"
+            
+            for metodo, monto in pagos_detalle:
+                if monto > 0:
+                    cursor.execute(sql_pago, (id_recibo, f_sql, monto, metodo, nota_pago))
+
         return id_recibo
     except Error as e:
         print(f"Error save_recibo: {e}")
+        # Importante: Si falla algo, hacer rollback en la vista que llama a esto (normalmente manejado por el context manager)
         return None
     finally: 
         if cursor: cursor.close()
@@ -172,22 +232,70 @@ def get_specific_recibo(connection, id_recibo):
     cursor = None
     try:
         cursor = connection.cursor(dictionary=True, buffered=True)
-        cursor.execute("SELECT r.*, dr.nombre as nombre_doctor FROM recibos r LEFT JOIN dr ON r.id_dr = dr.id_dr WHERE r.id_recibo = %s", (id_recibo,))
-        recibo = cursor.fetchone()
-        if not recibo: return None
+        query = """
+            SELECT r.*, dr.nombre as nombre_doctor, 
+                   ce.nombre as nombre_centro, ce.direccion as direccion_centro,
+                   ce.tel as telefono_centro, ce.cel as celular_centro
+            FROM recibos r
+            LEFT JOIN dr ON r.id_dr = dr.id_dr
+            LEFT JOIN centro ce ON dr.centro = ce.id_centro
+            WHERE r.id_recibo = %s
+        """
+        cursor.execute(query, (id_recibo,))
+        data = cursor.fetchone()
         
-        for k in ['subtotal_bruto', 'descuento_total', 'total_neto', 'pago_efectivo', 'pago_tarjeta', 'pago_transferencia', 'pago_otro']:
-            if recibo.get(k): recibo[k] = float(recibo[k])
-
+        if data:
+            if isinstance(data['fecha'], date): 
+                data['fecha'] = data['fecha'].strftime('%d/%m/%Y')
+            
+            # --- CORRECCIÓN: Convertir SIEMPRE, aunque sea 0 ---
+            campos_moneda = [
+                'subtotal_bruto', 'descuento_total', 'total_neto', 
+                'pago_efectivo', 'pago_tarjeta', 'pago_transferencia', 
+                'pago_otro', 'saldo_pendiente'
+            ]
+            
+            for k in campos_moneda:
+                # Usamos 'or 0' para convertir None a 0, y float() para todo lo demás
+                data[k] = float(data.get(k) or 0)
+        
+        # Obtener los detalles (productos)
         cursor.execute("SELECT rd.*, ps.nombre as nombre_producto FROM recibo_detalle rd LEFT JOIN productos_servicios ps ON rd.id_prod = ps.id_prod WHERE rd.id_recibo = %s", (id_recibo,))
         detalles = cursor.fetchall()
         for d in detalles:
             for k in ['costo_unitario_venta', 'descuento_linea', 'subtotal_linea_neto']:
-                if d.get(k): d[k] = float(d[k])
+                d[k] = float(d.get(k) or 0)
         
-        recibo['detalles'] = detalles or []
-        return recibo
-    except Error: return None
+        if data:
+            data['detalles'] = detalles or []
+
+            # ===============================================================
+            # === BLOQUE NUEVO: OBLIGATORIO PARA QUE CUADREN LOS TOTALES ===
+            # ===============================================================
+            try:
+                # Buscamos TODOS los pagos (el inicial y los abonos)
+                sql_pagos = "SELECT * FROM recibo_pagos WHERE id_recibo = %s ORDER BY fecha ASC"
+                cursor.execute(sql_pagos, (id_recibo,))
+                pagos_raw = cursor.fetchall()
+                
+                # Convertimos números para que no den error en el PDF
+                if pagos_raw:
+                    for p in pagos_raw:
+                        p['monto'] = float(p.get('monto') or 0)
+                        if isinstance(p['fecha'], date): 
+                            p['fecha'] = p['fecha'].strftime('%d/%m/%Y')
+                    data['historial_pagos'] = pagos_raw
+                else:
+                    data['historial_pagos'] = []
+            except Exception as e:
+                print(f"Error leyendo pagos: {e}")
+                data['historial_pagos'] = []
+            # ===============================================================
+
+        return data
+    except Error as e: 
+        print(f"Error en get_specific_recibo: {e}")
+        return None
     finally: 
         if cursor: cursor.close()
 
@@ -439,11 +547,13 @@ def get_recibo_detalles_by_id(connection, id_recibo):
         if cursor: cursor.close()
 
 def get_recibos_by_patient(connection, patient_id):
-    """Obtiene todos los recibos de un paciente con un resumen de conceptos."""
+    """Obtiene todos los recibos con estado y saldo."""
     cursor = None
     try:
+        # AGREGAMOS r.saldo_pendiente y r.estado A LA CONSULTA
         query = """
-            SELECT r.id_recibo, r.fecha, r.total_neto, dr.nombre AS nombre_doctor,
+            SELECT r.id_recibo, r.fecha, r.total_neto, r.saldo_pendiente, r.estado, 
+                   dr.nombre AS nombre_doctor,
             (SELECT GROUP_CONCAT(COALESCE(NULLIF(TRIM(rd.descripcion_prod), ''), ps.nombre) SEPARATOR ', ')
              FROM recibo_detalle rd LEFT JOIN productos_servicios ps ON rd.id_prod = ps.id_prod
              WHERE rd.id_recibo = r.id_recibo) as conceptos_principales
@@ -456,16 +566,19 @@ def get_recibos_by_patient(connection, patient_id):
         recibos = cursor.fetchall()
         for r in recibos:
             if isinstance(r['fecha'], date): r['fecha'] = r['fecha'].strftime('%d/%m/%Y')
-            if r.get('total_neto'): r['total_neto'] = float(r['total_neto'])
+            # Conversión segura
+            r['total_neto'] = float(r.get('total_neto') or 0)
+            r['saldo_pendiente'] = float(r.get('saldo_pendiente') or 0)
         return recibos or []
     except Error: return []
     finally: 
         if cursor: cursor.close()
 
 def get_recibo_by_id(connection, recibo_id):
-    """Obtiene encabezado de recibo con datos extra para PDF."""
+    """Obtiene encabezado de recibo con datos extra para PDF y Vista Web."""
     cursor = None
     try:
+        cursor = connection.cursor(dictionary=True, buffered=True)
         query = """
             SELECT r.*, dr.nombre as nombre_doctor_recibo, 
                    ce.nombre as nombre_centro, ce.direccion as direccion_centro,
@@ -475,15 +588,28 @@ def get_recibo_by_id(connection, recibo_id):
             LEFT JOIN centro ce ON dr.centro = ce.id_centro
             WHERE r.id_recibo = %s
         """
-        cursor = connection.cursor(dictionary=True, buffered=True)
         cursor.execute(query, (recibo_id,))
         data = cursor.fetchone()
+        
         if data:
-            if isinstance(data['fecha'], date): data['fecha'] = data['fecha'].strftime('%d/%m/%Y')
-            for k in ['subtotal_bruto', 'descuento_total', 'total_neto', 'pago_efectivo', 'pago_tarjeta', 'pago_transferencia', 'pago_otro']:
-                if data.get(k): data[k] = float(data[k])
+            if isinstance(data['fecha'], date): 
+                data['fecha'] = data['fecha'].strftime('%d/%m/%Y')
+            
+            # --- LISTA DE CAMPOS A CONVERTIR A FLOAT (Corrección aquí) ---
+            campos_moneda = [
+                'subtotal_bruto', 'descuento_total', 'total_neto', 
+                'pago_efectivo', 'pago_tarjeta', 'pago_transferencia', 
+                'pago_otro', 'saldo_pendiente' # <--- Agregado para evitar el error Decimal vs Float
+            ]
+            
+            for k in campos_moneda:
+                # Convertimos siempre, usando 0 si es None
+                data[k] = float(data.get(k) or 0)
+                
         return data
-    except Error: return None
+    except Error as e: 
+        print(f"Error en get_recibo_by_id: {e}")
+        return None
     finally: 
         if cursor: cursor.close()
 
@@ -506,3 +632,104 @@ def get_historial_compras_paciente(connection, id_px):
     except Error: return []
     finally: 
         if cursor: cursor.close()
+
+# --- GESTIÓN DE DEUDAS Y ABONOS (NUEVO) ---
+
+def registrar_abono(connection, id_recibo, monto, metodo_pago, notas="Abono a cuenta"):
+    """
+    Registra un pago posterior a la fecha de venta.
+    Actualiza el saldo pendiente y el estado del recibo.
+    NO modifica inventario (ya se entregó el producto antes).
+    """
+    cursor = None
+    try:
+        cursor = connection.cursor()
+        monto = float(monto)
+        
+        # 1. Insertar el pago en el historial
+        sql_insert = "INSERT INTO recibo_pagos (id_recibo, fecha, monto, metodo_pago, notas) VALUES (%s, NOW(), %s, %s, %s)"
+        cursor.execute(sql_insert, (id_recibo, monto, metodo_pago, notas))
+        
+        # 2. Actualizar el saldo del recibo padre
+        sql_update = "UPDATE recibos SET saldo_pendiente = saldo_pendiente - %s WHERE id_recibo = %s"
+        cursor.execute(sql_update, (monto, id_recibo))
+        
+        # 3. Verificar si ya se liquidó para cambiar estado a PAGADO
+        cursor.execute("SELECT saldo_pendiente FROM recibos WHERE id_recibo = %s", (id_recibo,))
+        row = cursor.fetchone()
+        if row:
+            saldo_actual = float(row[0])
+            # Si el saldo es cero o negativo (por centavos), marcar PAGADO
+            if saldo_actual <= 0.01:
+                cursor.execute("UPDATE recibos SET estado = 'PAGADO', saldo_pendiente = 0 WHERE id_recibo = %s", (id_recibo,))
+        
+        return True
+    except Error as e:
+        print(f"Error registrando abono: {e}")
+        return False
+    finally:
+        if cursor: cursor.close()
+
+def get_historial_pagos_recibo(connection, id_recibo):
+    """Obtiene la lista de todos los pagos (iniciales y abonos) de un recibo."""
+    cursor = None
+    try:
+        cursor = connection.cursor(dictionary=True, buffered=True)
+        sql = "SELECT * FROM recibo_pagos WHERE id_recibo = %s ORDER BY fecha ASC, fecha_registro ASC"
+        cursor.execute(sql, (id_recibo,))
+        pagos = cursor.fetchall()
+        for p in pagos:
+            if p.get('monto'): p['monto'] = float(p['monto'])
+            if isinstance(p['fecha'], date): p['fecha'] = p['fecha'].strftime('%d/%m/%Y')
+        return pagos or []
+    except Error: return []
+    finally:
+        if cursor: cursor.close()
+
+def get_total_deuda_paciente(connection, patient_id):
+    """Calcula cuánto debe el paciente en total (Suma de saldos pendientes)."""
+    cursor = None
+    try:
+        cursor = connection.cursor()
+        # Solo sumamos de recibos que estén marcados como PENDIENTE para ser más rápidos
+        sql = "SELECT SUM(saldo_pendiente) FROM recibos WHERE id_px = %s AND estado = 'PENDIENTE'"
+        cursor.execute(sql, (patient_id,))
+        res = cursor.fetchone()
+        return float(res[0]) if res and res[0] else 0.0
+    except Error: return 0.0
+    finally:
+        if cursor: cursor.close()
+
+# --- GESTIÓN DE INVENTARIO (NUEVO) ---
+
+def actualizar_stock_producto(connection, id_prod, cantidad_agregar):
+    """
+    Suma stock (Entrada de almacén). 
+    Para restar, enviar cantidad negativa, aunque save_recibo ya lo hace.
+    """
+    cursor = None
+    try:
+        cursor = connection.cursor()
+        sql = "UPDATE productos_servicios SET stock_actual = stock_actual + %s WHERE id_prod = %s"
+        cursor.execute(sql, (int(cantidad_agregar), id_prod))
+        return True
+    except Error: return False
+    finally:
+        if cursor: cursor.close()
+
+def get_primer_recibo_pendiente(connection, patient_id):
+    """Devuelve el ID del recibo pendiente más antiguo para ir a cobrarlo directo."""
+    cursor = None
+    try:
+        cursor = connection.cursor()
+        # Buscamos el primero por fecha ascendente (el más viejo)
+        sql = "SELECT id_recibo FROM recibos WHERE id_px = %s AND estado = 'PENDIENTE' ORDER BY fecha ASC LIMIT 1"
+        cursor.execute(sql, (patient_id,))
+        row = cursor.fetchone()
+        return row[0] if row else None
+    except Exception as e:
+        print(f"Error buscando recibo pendiente: {e}")
+        return None
+    finally:
+        if cursor: cursor.close()
+

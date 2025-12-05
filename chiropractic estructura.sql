@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Servidor: 127.0.0.1
--- Tiempo de generación: 10-11-2025 a las 03:12:37
+-- Tiempo de generación: 03-12-2025 a las 23:53:27
 -- Versión del servidor: 10.4.32-MariaDB
 -- Versión de PHP: 8.2.12
 
@@ -128,7 +128,8 @@ CREATE TABLE `dr` (
   `contraseña` varchar(255) NOT NULL,
   `usuario` varchar(50) NOT NULL,
   `centro` int(11) DEFAULT NULL,
-  `esta_activo` tinyint(1) NOT NULL DEFAULT 1 COMMENT '1 si el doctor está activo, 0 si está deshabilitado'
+  `esta_activo` tinyint(1) NOT NULL DEFAULT 1 COMMENT '1 si el doctor está activo, 0 si está deshabilitado',
+  `config_redireccion_seguimiento` int(11) DEFAULT 1
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
@@ -223,38 +224,38 @@ CREATE TABLE `quiropractico` (
   `id_px` int(11) NOT NULL,
   `id_dr` int(11) DEFAULT NULL COMMENT 'FK al doctor que realizó el seguimiento',
   `fecha` date NOT NULL,
-  `occipital` varchar(15) DEFAULT NULL,
-  `atlas` varchar(15) DEFAULT NULL,
-  `axis` varchar(15) DEFAULT NULL,
-  `c3` varchar(15) DEFAULT NULL,
-  `c4` varchar(15) DEFAULT NULL,
-  `c5` varchar(15) DEFAULT NULL,
-  `c6` varchar(15) DEFAULT NULL,
-  `c7` varchar(15) DEFAULT NULL,
-  `t1` varchar(15) DEFAULT NULL,
-  `t2` varchar(15) DEFAULT NULL,
-  `t3` varchar(15) DEFAULT NULL,
-  `t4` varchar(15) DEFAULT NULL,
-  `t5` varchar(15) DEFAULT NULL,
-  `t6` varchar(15) DEFAULT NULL,
-  `t7` varchar(15) DEFAULT NULL,
-  `t8` varchar(15) DEFAULT NULL,
-  `t9` varchar(15) DEFAULT NULL,
-  `t10` varchar(15) DEFAULT NULL,
-  `t11` varchar(15) DEFAULT NULL,
-  `t12` varchar(15) DEFAULT NULL,
-  `l1` varchar(15) DEFAULT NULL,
-  `l2` varchar(15) DEFAULT NULL,
-  `l3` varchar(15) DEFAULT NULL,
-  `l4` varchar(15) DEFAULT NULL,
-  `l5` varchar(15) DEFAULT NULL,
-  `sacro` varchar(15) DEFAULT NULL,
-  `coxis` varchar(15) DEFAULT NULL,
-  `iliaco_d` varchar(15) DEFAULT NULL,
-  `iliaco_i` varchar(15) DEFAULT NULL,
+  `occipital` varchar(100) DEFAULT NULL,
+  `atlas` varchar(100) DEFAULT NULL,
+  `axis` varchar(100) DEFAULT NULL,
+  `c3` varchar(100) DEFAULT NULL,
+  `c4` varchar(100) DEFAULT NULL,
+  `c5` varchar(100) DEFAULT NULL,
+  `c6` varchar(100) DEFAULT NULL,
+  `c7` varchar(100) DEFAULT NULL,
+  `t1` varchar(100) DEFAULT NULL,
+  `t2` varchar(100) DEFAULT NULL,
+  `t3` varchar(100) DEFAULT NULL,
+  `t4` varchar(100) DEFAULT NULL,
+  `t5` varchar(100) DEFAULT NULL,
+  `t6` varchar(100) DEFAULT NULL,
+  `t7` varchar(100) DEFAULT NULL,
+  `t8` varchar(100) DEFAULT NULL,
+  `t9` varchar(100) DEFAULT NULL,
+  `t10` varchar(100) DEFAULT NULL,
+  `t11` varchar(100) DEFAULT NULL,
+  `t12` varchar(100) DEFAULT NULL,
+  `l1` varchar(100) DEFAULT NULL,
+  `l2` varchar(100) DEFAULT NULL,
+  `l3` varchar(100) DEFAULT NULL,
+  `l4` varchar(100) DEFAULT NULL,
+  `l5` varchar(100) DEFAULT NULL,
+  `sacro` varchar(100) DEFAULT NULL,
+  `coxis` varchar(100) DEFAULT NULL,
+  `iliaco_d` varchar(100) DEFAULT NULL,
+  `iliaco_i` varchar(100) DEFAULT NULL,
   `notas` text DEFAULT NULL,
   `terapia` varchar(100) DEFAULT NULL,
-  `pubis` varchar(15) DEFAULT NULL,
+  `pubis` varchar(100) DEFAULT NULL,
   `id_plan_cuidado_asociado` int(11) DEFAULT NULL COMMENT 'FK al plan de cuidado asociado'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 

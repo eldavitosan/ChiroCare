@@ -1,36 +1,31 @@
-ALTER TABLE dr 
-ADD COLUMN config_redireccion_seguimiento INT DEFAULT 1;
--- 1: Ir al Menú Principal(Default)
--- 2: Ir a Detalles del Paciente
+-- ----------------------------------------------------------------
+-- 1. PREPARAR RECIBOS PARA MANEJAR DEUDAS
+-- Agregamos 'estado' (Semaforo) y 'saldo_pendiente' (La deuda)
+-- ----------------------------------------------------------------
+ALTER TABLE `recibos`
+ADD COLUMN `estado` ENUM('PAGADO', 'PENDIENTE', 'CANCELADO') NOT NULL DEFAULT 'PAGADO',
+ADD COLUMN `saldo_pendiente` DECIMAL(10,2) NOT NULL DEFAULT 0.00;
 
-ALTER TABLE quiropractico
-MODIFY COLUMN occipital VARCHAR(100) DEFAULT NULL,
-MODIFY COLUMN atlas VARCHAR(100) DEFAULT NULL,
-MODIFY COLUMN axis VARCHAR(100) DEFAULT NULL,
-MODIFY COLUMN c3 VARCHAR(100) DEFAULT NULL,
-MODIFY COLUMN c4 VARCHAR(100) DEFAULT NULL,
-MODIFY COLUMN c5 VARCHAR(100) DEFAULT NULL,
-MODIFY COLUMN c6 VARCHAR(100) DEFAULT NULL,
-MODIFY COLUMN c7 VARCHAR(100) DEFAULT NULL,
-MODIFY COLUMN t1 VARCHAR(100) DEFAULT NULL,
-MODIFY COLUMN t2 VARCHAR(100) DEFAULT NULL,
-MODIFY COLUMN t3 VARCHAR(100) DEFAULT NULL,
-MODIFY COLUMN t4 VARCHAR(100) DEFAULT NULL,
-MODIFY COLUMN t5 VARCHAR(100) DEFAULT NULL,
-MODIFY COLUMN t6 VARCHAR(100) DEFAULT NULL,
-MODIFY COLUMN t7 VARCHAR(100) DEFAULT NULL,
-MODIFY COLUMN t8 VARCHAR(100) DEFAULT NULL,
-MODIFY COLUMN t9 VARCHAR(100) DEFAULT NULL,
-MODIFY COLUMN t10 VARCHAR(100) DEFAULT NULL,
-MODIFY COLUMN t11 VARCHAR(100) DEFAULT NULL,
-MODIFY COLUMN t12 VARCHAR(100) DEFAULT NULL,
-MODIFY COLUMN l1 VARCHAR(100) DEFAULT NULL,
-MODIFY COLUMN l2 VARCHAR(100) DEFAULT NULL,
-MODIFY COLUMN l3 VARCHAR(100) DEFAULT NULL,
-MODIFY COLUMN l4 VARCHAR(100) DEFAULT NULL,
-MODIFY COLUMN l5 VARCHAR(100) DEFAULT NULL,
-MODIFY COLUMN sacro VARCHAR(100) DEFAULT NULL,
-MODIFY COLUMN coxis VARCHAR(100) DEFAULT NULL,
-MODIFY COLUMN iliaco_d VARCHAR(100) DEFAULT NULL,
-MODIFY COLUMN iliaco_i VARCHAR(100) DEFAULT NULL,
-MODIFY COLUMN pubis VARCHAR(100) DEFAULT NULL;
+-- ----------------------------------------------------------------
+-- 2. CREAR TABLA PARA HISTORIAL DE ABONOS (Recibo Abierto)
+-- Aquí guardaremos cada pago individual (el inicial y los futuros)
+-- ----------------------------------------------------------------
+CREATE TABLE `recibo_pagos` (
+  `id_pago` int(11) NOT NULL AUTO_INCREMENT,
+  `id_recibo` int(11) NOT NULL,
+  `fecha` date NOT NULL,
+  `monto` decimal(10,2) NOT NULL,
+  `metodo_pago` varchar(50) NOT NULL COMMENT 'Efectivo, Tarjeta, Transferencia, Otro',
+  `notas` varchar(255) DEFAULT NULL,
+  `fecha_registro` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id_pago`),
+  KEY `idx_pago_recibo` (`id_recibo`),
+  CONSTRAINT `fk_pago_recibo` FOREIGN KEY (`id_recibo`) REFERENCES `recibos` (`id_recibo`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ----------------------------------------------------------------
+-- 3. ACTIVAR CONTROL DE INVENTARIO
+-- Agregamos la columna para saber cuántos productos quedan
+-- ----------------------------------------------------------------
+ALTER TABLE `productos_servicios`
+ADD COLUMN `stock_actual` INT(11) NOT NULL DEFAULT 0 COMMENT 'Cantidad disponible en inventario';

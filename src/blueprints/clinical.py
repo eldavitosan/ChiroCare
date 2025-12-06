@@ -1200,8 +1200,8 @@ def manage_plan_cuidado(patient_id):
         flash('Ocurrió un error inesperado.', 'danger')
         return redirect(url_for('patient.patient_detail', patient_id=patient_id))
 
-@clinical_bp.route('/recibo', methods=['GET', 'POST'])
 @clinical_bp.route('/recibo/<int:recibo_id>', methods=['GET'])
+@clinical_bp.route('/recibo', methods=['GET', 'POST'])
 @login_required
 def manage_recibos(patient_id, recibo_id=None):
     # --- Lógica POST (Guardar) ---

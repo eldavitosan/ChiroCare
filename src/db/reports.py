@@ -425,3 +425,104 @@ def count_seguimientos_hoy(connection, fecha_hoy_str):
         if cursor:
             cursor.close()
 
+# --- Reportes de Cobranza y Caja ---
+
+def get_cuentas_por_cobrar(connection, doctor_id=0):
+    """Obtiene lista de recibos con saldo pendiente."""
+    cursor = None
+    try:
+        filtro_dr = ""
+        params = []
+        if doctor_id != 0:
+            filtro_dr = "AND r.id_dr = %s"
+            params.append(doctor_id)
+
+        query = f"""
+            SELECT r.id_recibo, r.fecha, r.total_neto, r.saldo_pendiente,
+                   dp.id_px, dp.nombre, dp.apellidop, dp.apellidom, dp.cel,
+                   dr.nombre as nombre_doctor
+            FROM recibos r
+            JOIN datos_personales dp ON r.id_px = dp.id_px
+            JOIN dr ON r.id_dr = dr.id_dr
+            WHERE r.saldo_pendiente > 0.01 {filtro_dr}
+            ORDER BY r.fecha ASC
+        """
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute(query, tuple(params))
+        res = cursor.fetchall()
+        
+        for r in res:
+            r['total_neto'] = float(r.get('total_neto') or 0)
+            r['saldo_pendiente'] = float(r.get('saldo_pendiente') or 0)
+            if isinstance(r['fecha'], date): r['fecha'] = r['fecha'].strftime('%d/%m/%Y')
+            r['nombre_paciente'] = f"{r['nombre']} {r['apellidop']} {r.get('apellidom','')}".strip()
+            
+        return res
+    except Exception as e:
+        print(f"Error report cxc: {e}")
+        return []
+    finally:
+        if cursor: cursor.close()
+
+def get_corte_caja_detallado(connection, fecha_inicio_str, fecha_fin_str, doctor_id=0):
+    """
+    Suma los PAGOS REALES (Flujo de Efectivo) registrados en recibo_pagos.
+    Incluye ventas de contado y abonos a deudas pasadas.
+    """
+    cursor = None
+    try:
+        params = [fecha_inicio_str, fecha_fin_str]
+        filtro_dr = ""
+        # Nota: recibo_pagos no tiene id_dr directo, lo unimos con recibos
+        if doctor_id != 0:
+            filtro_dr = "AND r.id_dr = %s"
+            params.append(doctor_id)
+
+        # 1. Totales por Método de Pago
+        query_metodos = f"""
+            SELECT rp.metodo_pago, SUM(rp.monto) as total_metodo
+            FROM recibo_pagos rp
+            JOIN recibos r ON rp.id_recibo = r.id_recibo
+            WHERE rp.fecha BETWEEN %s AND %s {filtro_dr}
+            GROUP BY rp.metodo_pago
+            ORDER BY total_metodo DESC
+        """
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute(query_metodos, tuple(params))
+        totales_metodo = cursor.fetchall()
+        
+        # 2. Lista Detallada de Movimientos (AGREGADO r.id_px)
+        query_detalle = f"""
+            SELECT rp.id_pago, rp.fecha, rp.monto, rp.metodo_pago, rp.notas,
+                   r.id_recibo, r.id_px, dp.nombre, dp.apellidop
+            FROM recibo_pagos rp
+            JOIN recibos r ON rp.id_recibo = r.id_recibo
+            JOIN datos_personales dp ON r.id_px = dp.id_px
+            WHERE rp.fecha BETWEEN %s AND %s {filtro_dr}
+            ORDER BY rp.fecha DESC, rp.id_pago DESC
+        """
+        cursor.execute(query_detalle, tuple(params))
+        movimientos = cursor.fetchall()
+
+        # Formatear
+        total_general = 0.0
+        for t in totales_metodo:
+            t['total_metodo'] = float(t.get('total_metodo') or 0)
+            total_general += t['total_metodo']
+            
+        for m in movimientos:
+            m['monto'] = float(m.get('monto') or 0)
+            if isinstance(m['fecha'], date): m['fecha'] = m['fecha'].strftime('%d/%m/%Y')
+            m['paciente'] = f"{m['nombre']} {m['apellidop']}"
+
+        return {
+            'totales_por_metodo': totales_metodo,
+            'total_general': total_general,
+            'movimientos': movimientos
+        }
+
+    except Exception as e:
+        print(f"Error corte caja: {e}")
+        return {'totales_por_metodo': [], 'total_general': 0.0, 'movimientos': []}
+    finally:
+        if cursor: cursor.close()

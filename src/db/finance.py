@@ -146,11 +146,10 @@ def save_recibo(connection, datos_recibo, detalles_recibo):
         
         # 2. Determinar Deuda y Estado
         saldo_pendiente = total_neto - total_pagado_inicial
-        # Si el saldo es menor a 1 centavo (por errores de redondeo), se considera pagado
         estado = 'PENDIENTE' if saldo_pendiente > 0.01 else 'PAGADO'
-        if saldo_pendiente < 0: saldo_pendiente = 0 # No guardar saldos negativos aqui
+        if saldo_pendiente < 0: saldo_pendiente = 0
 
-        # 3. Insertar Cabecera del Recibo (Ahora con estado y saldo)
+        # 3. Insertar Cabecera del Recibo
         sql_r = """
             INSERT INTO recibos 
             (id_px, id_dr, fecha, subtotal_bruto, descuento_total, total_neto, 
@@ -167,33 +166,47 @@ def save_recibo(connection, datos_recibo, detalles_recibo):
         cursor.execute(sql_r, vals_r)
         id_recibo = cursor.lastrowid
 
-        # 4. Insertar Detalles y ACTUALIZAR INVENTARIO
+        # 4. Insertar Detalles y ACTUALIZAR INVENTARIO (SOLO SI ES PRODUCTO)
         sql_d = """INSERT INTO recibo_detalle (id_recibo, id_prod, cantidad, descripcion_prod, costo_unitario_venta, costo_unitario_compra, descuento_linea, subtotal_linea_neto) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"""
+        
+        # Query para descontar stock
         sql_update_stock = """UPDATE productos_servicios SET stock_actual = stock_actual - %s WHERE id_prod = %s"""
+        
+        # Query para saber qué tipo de ítem es (0=Servicio, 1=Producto, 2=Terapia)
+        sql_check_type = "SELECT adicional, costo FROM productos_servicios WHERE id_prod = %s"
         
         vals_d = []
         for d in detalles_recibo:
             id_prod = d['id_prod']
             cantidad = int(d['cantidad'])
-            costo_interno = get_producto_costo_interno(connection, id_prod)
             
+            # Consultamos Tipo y Costo Interno al mismo tiempo
+            cursor.execute(sql_check_type, (id_prod,))
+            prod_info = cursor.fetchone()
+            
+            tipo_adicional = 0
+            costo_interno = 0.0
+            
+            if prod_info:
+                tipo_adicional = int(prod_info[0]) # 0, 1 o 2
+                costo_interno = float(prod_info[1]) if prod_info[1] else 0.0
+            
+            # Agregamos al detalle del recibo (siempre se guarda el historial)
             vals_d.append((
                 id_recibo, id_prod, cantidad, d.get('descripcion_prod'), 
                 d['costo_unitario_venta'], costo_interno, d.get('descuento_linea', 0), d['subtotal_linea_neto']
             ))
             
-            # Descontar del inventario (uno por uno para seguridad)
-            cursor.execute(sql_update_stock, (cantidad, id_prod))
+            # --- CORRECCIÓN AQUÍ: Solo restamos stock si es TIPO 1 (Producto Físico) ---
+            if tipo_adicional == 1:
+                cursor.execute(sql_update_stock, (cantidad, id_prod))
+            # ---------------------------------------------------------------------------
         
         cursor.executemany(sql_d, vals_d)
 
-        # 5. Registrar el pago inicial en el historial (Si hubo pago)
+        # 5. Registrar el pago inicial en el historial
         if total_pagado_inicial > 0:
-            # Creamos una nota automática para este primer pago
             nota_pago = "Pago inicial al crear el recibo"
-            
-            # Insertamos un registro por cada método si es > 0, o uno consolidado. 
-            # Para simplificar, insertamos uno consolidado o desglosado. Vamos a desglosar:
             pagos_detalle = [
                 ('Efectivo', pago_efectivo), ('Tarjeta', pago_tarjeta), 
                 ('Transferencia', pago_transferencia), 
@@ -209,11 +222,10 @@ def save_recibo(connection, datos_recibo, detalles_recibo):
         return id_recibo
     except Error as e:
         print(f"Error save_recibo: {e}")
-        # Importante: Si falla algo, hacer rollback en la vista que llama a esto (normalmente manejado por el context manager)
         return None
     finally: 
         if cursor: cursor.close()
-
+        
 def get_recibos_summary(connection, patient_id):
     cursor = None
     try:

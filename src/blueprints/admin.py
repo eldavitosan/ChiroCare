@@ -1,6 +1,7 @@
 import os
 from flask import (
-    Blueprint, render_template, request, redirect, jsonify, session, flash, url_for
+    Blueprint, render_template, request, redirect, jsonify, session, flash, url_for,
+    current_app
 )
 from mysql.connector import Error
 from datetime import datetime, date
@@ -13,7 +14,7 @@ from db.connection import connect_to_db, get_db_cursor
 # Importar funciones de base de datos
 from forms import (RegisterForm, EditDoctorForm, ChangePasswordForm, ClinicaForm, ProductoServicioForm,
                    FormIngresos, FormUtilidad, FormNuevosPacientes, FormPacientesFrecuentes, FormSeguimientos, 
-                   FormUsoPlanes)
+                   FormUsoPlanes, FormCuentasPorCobrar, FormCorteCaja)
 from db.auth import (
     add_user, get_all_doctors, get_doctor_by_id,
     update_doctor_details, update_doctor_password, set_doctor_active_status,
@@ -24,12 +25,13 @@ from db.reports import (
     count_seguimientos_hoy, get_ingresos_por_periodo, get_ingresos_por_doctor_periodo,
     get_utilidad_estimada_por_periodo, get_utilidad_estimada_por_doctor_periodo,
     get_pacientes_nuevos_por_periodo, get_pacientes_mas_frecuentes,
-    get_seguimientos_por_doctor_periodo, get_uso_planes_de_cuidado
+    get_seguimientos_por_doctor_periodo, get_uso_planes_de_cuidado,
+    get_cuentas_por_cobrar, get_corte_caja_detallado
 )
 from db.finance import (
     get_all_productos_servicios, get_producto_servicio_by_id,
     add_producto_servicio, update_producto_servicio, 
-    set_producto_servicio_active_status
+    set_producto_servicio_active_status, actualizar_stock_producto
 )
 from utils.date_manager import to_frontend_str
 from decorators import login_required, admin_required
@@ -548,6 +550,7 @@ def admin_reportes_dashboard():
         first_day_of_month = today.replace(day=1)
         default_date_data = {'fecha_inicio': first_day_of_month, 'fecha_fin': today}
 
+    # Inicializar Forms
     if request.method == 'POST':
         form_ingresos = FormIngresos(request.form)
         form_utilidad = FormUtilidad(request.form)
@@ -555,6 +558,8 @@ def admin_reportes_dashboard():
         form_pac_frec = FormPacientesFrecuentes(request.form)
         form_seguimientos = FormSeguimientos(request.form)
         form_uso_planes = FormUsoPlanes(request.form)
+        form_cxc = FormCuentasPorCobrar(request.form) # Nuevo
+        form_caja = FormCorteCaja(request.form)       # Nuevo
     else:
         form_ingresos = FormIngresos(data=default_date_data)
         form_utilidad = FormUtilidad(data=default_date_data)
@@ -562,6 +567,8 @@ def admin_reportes_dashboard():
         form_pac_frec = FormPacientesFrecuentes(data=default_date_data) 
         form_seguimientos = FormSeguimientos(data=default_date_data)
         form_uso_planes = FormUsoPlanes(data=default_date_data)
+        form_cxc = FormCuentasPorCobrar()             # Nuevo
+        form_caja = FormCorteCaja(data=default_date_data) # Nuevo
 
     # Variables de datos vacías por defecto
     datos_ingresos = labels_ingresos = data_values_ingresos = None
@@ -570,9 +577,10 @@ def admin_reportes_dashboard():
     datos_pacientes_frecuentes = None
     datos_seguimientos = labels_seguimientos = data_values_seguimientos = None
     datos_uso_planes = labels_uso_planes = data_values_uso_planes = None
+    datos_cxc = None # Nuevo
+    datos_caja = None # Nuevo
 
     try:
-        # Solo necesitamos lectura para reportes
         with get_db_cursor() as (connection, cursor):
             if not connection:
                 flash('Error conectando a la base de datos.', 'danger')
@@ -582,113 +590,98 @@ def admin_reportes_dashboard():
                 doctor_choices = [(dr['id_dr'], dr['nombre']) for dr in doctores]
                 doctor_choices.insert(0, (0, "Todos los Doctores"))
 
-                form_ingresos.doctor_id.choices = doctor_choices
-                form_utilidad.doctor_id.choices = doctor_choices
-                form_nuevos_pac.doctor_id.choices = doctor_choices
-                form_seguimientos.doctor_id.choices = doctor_choices
+                for f in [form_ingresos, form_utilidad, form_nuevos_pac, form_seguimientos, form_cxc, form_caja]:
+                    f.doctor_id.choices = doctor_choices
 
-                # --- PROCESAMIENTO DE FORMULARIOS ---
+                # --- PROCESAMIENTO ---
                 
-                # Reporte Ingresos
+                # 1. Ingresos
                 if form_ingresos.submit_ingresos.data and form_ingresos.validate_on_submit():
-                    fecha_inicio_str = form_ingresos.fecha_inicio.data.strftime('%Y-%m-%d')
-                    fecha_fin_str = form_ingresos.fecha_fin.data.strftime('%Y-%m-%d')
-                    doctor_id = form_ingresos.doctor_id.data
-
-                    if doctor_id == 0:
-                        datos_ingresos_lista = get_ingresos_por_periodo(connection, fecha_inicio_str, fecha_fin_str)
-                        if datos_ingresos_lista:
-                            datos_ingresos = datos_ingresos_lista
-                            labels_ingresos = [item['periodo'] for item in datos_ingresos_lista]
-                            data_values_ingresos = [item['total_ingresos_periodo'] for item in datos_ingresos_lista]
-                        else:
-                            flash("No se encontraron ingresos.", "info")
+                    datos_ingresos_lista = []
+                    fi, ff = form_ingresos.fecha_inicio.data.strftime('%Y-%m-%d'), form_ingresos.fecha_fin.data.strftime('%Y-%m-%d')
+                    did = form_ingresos.doctor_id.data
+                    if did == 0:
+                        datos_ingresos_lista = get_ingresos_por_periodo(connection, fi, ff)
+                        labels_ingresos = [i['periodo'] for i in datos_ingresos_lista]
+                        data_values_ingresos = [i['total_ingresos_periodo'] for i in datos_ingresos_lista]
                     else:
-                        datos_ingresos_lista = get_ingresos_por_doctor_periodo(connection, fecha_inicio_str, fecha_fin_str, doctor_id)
-                        if datos_ingresos_lista:
-                            datos_ingresos = datos_ingresos_lista
-                            labels_ingresos = [item['nombre_doctor'] for item in datos_ingresos_lista]
-                            data_values_ingresos = [item['total_ingresos_doctor'] for item in datos_ingresos_lista]
-                        else:
-                            flash("No se encontraron ingresos.", "info")
+                        datos_ingresos_lista = get_ingresos_por_doctor_periodo(connection, fi, ff, did)
+                        labels_ingresos = [i['nombre_doctor'] for i in datos_ingresos_lista]
+                        data_values_ingresos = [i['total_ingresos_doctor'] for i in datos_ingresos_lista]
+                    datos_ingresos = datos_ingresos_lista
+                    if not datos_ingresos: flash("No hay datos de ingresos.", "info")
 
-                # Reporte Utilidad
+                # 2. Utilidad
                 elif form_utilidad.submit_utilidad.data and form_utilidad.validate_on_submit():
-                    fecha_inicio_str = form_utilidad.fecha_inicio.data.strftime('%Y-%m-%d')
-                    fecha_fin_str = form_utilidad.fecha_fin.data.strftime('%Y-%m-%d')
-                    doctor_id = form_utilidad.doctor_id.data
-                    
-                    if doctor_id == 0:
-                        datos_utilidad_lista = get_utilidad_estimada_por_periodo(connection, fecha_inicio_str, fecha_fin_str)
-                        if datos_utilidad_lista:
-                            datos_utilidad = datos_utilidad_lista
-                            labels_utilidad = [item['periodo'] for item in datos_utilidad_lista]
-                            data_values_utilidad = [item['total_utilidad_estimada_periodo'] for item in datos_utilidad_lista]
-                        else:
-                            flash("No se encontraron datos de utilidad.", "info")
+                    fi, ff = form_utilidad.fecha_inicio.data.strftime('%Y-%m-%d'), form_utilidad.fecha_fin.data.strftime('%Y-%m-%d')
+                    did = form_utilidad.doctor_id.data
+                    datos_lista = []
+                    if did == 0:
+                        datos_lista = get_utilidad_estimada_por_periodo(connection, fi, ff)
+                        labels_utilidad = [i['periodo'] for i in datos_lista]
+                        data_values_utilidad = [i['total_utilidad_estimada_periodo'] for i in datos_lista]
                     else:
-                        datos_utilidad_lista = get_utilidad_estimada_por_doctor_periodo(connection, fecha_inicio_str, fecha_fin_str, doctor_id)
-                        if datos_utilidad_lista:
-                            datos_utilidad = datos_utilidad_lista
-                            labels_utilidad = [item['nombre_doctor'] for item in datos_utilidad_lista]
-                            data_values_utilidad = [item['total_utilidad_estimada_doctor'] for item in datos_utilidad_lista]
-                        else:
-                            flash("No se encontraron datos de utilidad.", "info")
+                        datos_lista = get_utilidad_estimada_por_doctor_periodo(connection, fi, ff, did)
+                        labels_utilidad = [i['nombre_doctor'] for i in datos_lista]
+                        data_values_utilidad = [i['total_utilidad_estimada_doctor'] for i in datos_lista]
+                    datos_utilidad = datos_lista
+                    if not datos_utilidad: flash("No hay datos de utilidad.", "info")
 
-                # Reporte Nuevos Pacientes
+                # 3. Corte de Caja (NUEVO)
+                elif form_caja.submit_caja.data and form_caja.validate_on_submit():
+                    fi, ff = form_caja.fecha_inicio.data.strftime('%Y-%m-%d'), form_caja.fecha_fin.data.strftime('%Y-%m-%d')
+                    did = form_caja.doctor_id.data
+                    datos_caja = get_corte_caja_detallado(connection, fi, ff, did)
+                    if not datos_caja['movimientos']: flash("No hay movimientos de caja en este periodo.", "info")
+
+                # 4. Cuentas por Cobrar (NUEVO)
+                elif form_cxc.submit_cxc.data and form_cxc.validate_on_submit():
+                    did = form_cxc.doctor_id.data
+                    datos_cxc = get_cuentas_por_cobrar(connection, did)
+                    if not datos_cxc: flash("¡Felicidades! No hay cuentas por cobrar pendientes.", "success")
+
+                # 5. Pacientes Nuevos
                 elif form_nuevos_pac.submit_nuevos_pac.data and form_nuevos_pac.validate_on_submit():
-                    fecha_inicio_str = form_nuevos_pac.fecha_inicio.data.strftime('%Y-%m-%d')
-                    fecha_fin_str = form_nuevos_pac.fecha_fin.data.strftime('%Y-%m-%d')
-                    doctor_id = form_nuevos_pac.doctor_id.data
-                    
-                    datos_nuevos_pacientes_lista, datos_nuevos_pacientes_grafica = get_pacientes_nuevos_por_periodo(connection, fecha_inicio_str, fecha_fin_str, doctor_id)
-                    
-                    if not datos_nuevos_pacientes_lista:
-                        flash("No se encontraron pacientes nuevos.", "info")
-                    else:
-                        datos_nuevos_pacientes = datos_nuevos_pacientes_lista
-                        labels_nuevos_pac = [item['periodo_label'] for item in datos_nuevos_pacientes_grafica]
-                        data_values_nuevos_pac = [item['conteo'] for item in datos_nuevos_pacientes_grafica]
+                    fi, ff = form_nuevos_pac.fecha_inicio.data.strftime('%Y-%m-%d'), form_nuevos_pac.fecha_fin.data.strftime('%Y-%m-%d')
+                    did = form_nuevos_pac.doctor_id.data
+                    lista, grafica = get_pacientes_nuevos_por_periodo(connection, fi, ff, did)
+                    datos_nuevos_pacientes = lista
+                    if datos_nuevos_pacientes:
+                        labels_nuevos_pac = [i['periodo_label'] for i in grafica]
+                        data_values_nuevos_pac = [i['conteo'] for i in grafica]
+                    else: flash("No hay pacientes nuevos.", "info")
 
-                # Reporte Pacientes Frecuentes
+                # 6. Pacientes Frecuentes
                 elif form_pac_frec.submit_pac_frec.data and form_pac_frec.validate_on_submit():
-                    top_n = form_pac_frec.top_n.data
-                    fecha_inicio_str = form_pac_frec.fecha_inicio.data.strftime('%Y-%m-%d')
-                    fecha_fin_str = form_pac_frec.fecha_fin.data.strftime('%Y-%m-%d')
-                    datos_pacientes_frecuentes = get_pacientes_mas_frecuentes(connection, fecha_inicio_str, fecha_fin_str, top_n)
-                    if not datos_pacientes_frecuentes:
-                        flash("No se encontraron datos.", "info")
+                    datos_pacientes_frecuentes = get_pacientes_mas_frecuentes(connection, 
+                        form_pac_frec.fecha_inicio.data.strftime('%Y-%m-%d'),
+                        form_pac_frec.fecha_fin.data.strftime('%Y-%m-%d'),
+                        form_pac_frec.top_n.data)
+                    if not datos_pacientes_frecuentes: flash("No hay datos.", "info")
 
-                # Reporte Seguimientos
+                # 7. Seguimientos
                 elif form_seguimientos.submit_seguimientos.data and form_seguimientos.validate_on_submit():
-                    fecha_inicio_str = form_seguimientos.fecha_inicio.data.strftime('%Y-%m-%d')
-                    fecha_fin_str = form_seguimientos.fecha_fin.data.strftime('%Y-%m-%d')
-                    doctor_id = form_seguimientos.doctor_id.data
-                    
-                    datos_seguimientos_lista = get_seguimientos_por_doctor_periodo(connection, fecha_inicio_str, fecha_fin_str, doctor_id)
-                    if datos_seguimientos_lista:
-                        datos_seguimientos = datos_seguimientos_lista
-                        labels_seguimientos = [item['nombre_doctor'] for item in datos_seguimientos_lista]
-                        data_values_seguimientos = [item['numero_consultas'] for item in datos_seguimientos_lista]
-                    else:
-                        flash("No se encontraron seguimientos.", "info")
+                    fi, ff = form_seguimientos.fecha_inicio.data.strftime('%Y-%m-%d'), form_seguimientos.fecha_fin.data.strftime('%Y-%m-%d')
+                    did = form_seguimientos.doctor_id.data
+                    lista = get_seguimientos_por_doctor_periodo(connection, fi, ff, did)
+                    datos_seguimientos = lista
+                    if lista:
+                        labels_seguimientos = [i['nombre_doctor'] for i in lista]
+                        data_values_seguimientos = [i['numero_consultas'] for i in lista]
+                    else: flash("No hay seguimientos.", "info")
 
-                # Reporte Uso de Planes
+                # 8. Uso de Planes
                 elif form_uso_planes.submit_uso_planes.data and form_uso_planes.validate_on_submit():
-                    fecha_inicio_str = form_uso_planes.fecha_inicio.data.strftime('%Y-%m-%d')
-                    fecha_fin_str = form_uso_planes.fecha_fin.data.strftime('%Y-%m-%d')
-                    
-                    datos_uso_planes_dict = get_uso_planes_de_cuidado(connection, fecha_inicio_str, fecha_fin_str)
-                    
-                    if datos_uso_planes_dict and datos_uso_planes_dict['total_creados'] > 0:
-                        datos_uso_planes = datos_uso_planes_dict
-                        labels_uso_planes = ['Planes Activos', 'Planes Completados']
-                        data_values_uso_planes = [datos_uso_planes_dict['activos'], datos_uso_planes_dict['completados']]
-                    else:
-                        flash("No se encontraron planes.", "info")
+                    fi, ff = form_uso_planes.fecha_inicio.data.strftime('%Y-%m-%d'), form_uso_planes.fecha_fin.data.strftime('%Y-%m-%d')
+                    dic = get_uso_planes_de_cuidado(connection, fi, ff)
+                    if dic and dic['total_creados'] > 0:
+                        datos_uso_planes = dic
+                        labels_uso_planes = ['Activos', 'Completados']
+                        data_values_uso_planes = [dic['activos'], dic['completados']]
+                    else: flash("No hay planes.", "info")
 
     except Exception as e:
-        print(f"Error generando reporte: {e}")
+        print(f"Error reportes: {e}")
         flash(f"Error al procesar el reporte.", "danger")
 
     return render_template(
@@ -696,10 +689,41 @@ def admin_reportes_dashboard():
         form_ingresos=form_ingresos, form_utilidad=form_utilidad,
         form_nuevos_pac=form_nuevos_pac, form_pac_frec=form_pac_frec,
         form_seguimientos=form_seguimientos, form_uso_planes=form_uso_planes,
+        form_cxc=form_cxc, form_caja=form_caja, # <--- Pasamos los nuevos forms
         datos_ingresos=datos_ingresos, labels_ingresos=labels_ingresos, data_values_ingresos=data_values_ingresos,
         datos_utilidad=datos_utilidad, labels_utilidad=labels_utilidad, data_values_utilidad=data_values_utilidad,
         datos_nuevos_pacientes=datos_nuevos_pacientes, labels_nuevos_pac=labels_nuevos_pac, data_values_nuevos_pac=data_values_nuevos_pac,
         datos_pacientes_frecuentes=datos_pacientes_frecuentes,
         datos_seguimientos=datos_seguimientos, labels_seguimientos=labels_seguimientos, data_values_seguimientos=data_values_seguimientos,
-        datos_uso_planes=datos_uso_planes, labels_uso_planes=labels_uso_planes, data_values_uso_planes=data_values_uso_planes
+        datos_uso_planes=datos_uso_planes, labels_uso_planes=labels_uso_planes, data_values_uso_planes=data_values_uso_planes,
+        datos_cxc=datos_cxc, datos_caja=datos_caja 
     )
+
+@admin_bp.route('/producto/stock/actualizar', methods=['POST'])
+@login_required
+@admin_required
+def actualizar_stock_route():
+    try:
+        id_prod = request.form.get('id_prod')
+        cantidad = request.form.get('cantidad_stock')
+        
+        if not id_prod or not cantidad:
+            flash('Datos incompletos.', 'warning')
+            return redirect(url_for('admin.admin_manage_productos'))
+
+        with get_db_cursor(commit=True) as (connection, cursor):
+            cant_int = int(cantidad)
+            exito = actualizar_stock_producto(connection, id_prod, cant_int)
+            
+            if exito:
+                flash(f'Stock actualizado correctamente ({cant_int:+d} unidades).', 'success')
+            else:
+                flash('Error al actualizar el stock.', 'danger')
+                
+        return redirect(url_for('admin.admin_manage_productos'))
+
+    except Exception as e:
+        current_app.logger.error(f"Error stock: {e}")
+        flash('Ocurrió un error interno.', 'danger')
+        return redirect(url_for('admin.admin_manage_productos'))
+

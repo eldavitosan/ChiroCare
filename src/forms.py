@@ -316,3 +316,13 @@ class SeguimientoForm(FlaskForm):
     
     submit = SubmitField('Guardar Seguimiento')
 
+# --- Nuevos Forms para Cobranza y Caja ---
+
+class FormCuentasPorCobrar(FlaskForm):
+    """Filtra deudas por doctor (opcional)."""
+    doctor_id = SelectField('Filtrar por Doctor:', coerce=int, default=0, validators=[Optional()])
+    submit_cxc = SubmitField('Generar Reporte de Deudores')
+
+class FormCorteCaja(ReporteFechasDoctorForm):
+    """Hereda fecha_inicio, fecha_fin y doctor_id."""
+    submit_caja = SubmitField('Generar Corte de Caja')
